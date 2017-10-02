@@ -1,0 +1,237 @@
+<?xml version="1.0"?>
+
+<robot name="orca" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- BlueROV2 specs -->
+  <xacro:property name="THRUSTER_MASS" value="0.344"/> <!-- Per thruster -->
+  <xacro:property name="ENCLOSURE_MASS" value="0.5"/> <!-- Electronics enclosure -->
+  <xacro:property name="TOTAL_MASS" value="10"/>
+  <xacro:property name="LENGTH" value="0.457"/>
+  <xacro:property name="WIDTH" value="0.338"/>
+  <xacro:property name="HEIGHT" value="0.254"/>
+
+  <!-- Physics properties -->
+  <xacro:property name="FLUID_DENSITY" value="1000.0"/>
+
+  <!-- General constants -->
+  <xacro:property name="PI" value="3.1415926535897931"/>
+
+  <!-- Thruster macro -->
+  <xacro:macro name="t200" params="name *origin">
+
+    <link name="t200_link_${name}">
+
+      <inertial>
+        <mass value="${THRUSTER_MASS}"/>
+        <inertia
+          ixx="1.0" ixy="0.0" ixz="0.0"
+          iyy="1.0" iyz="0.0"
+          izz="1.0"/>
+      </inertial>
+
+      <visual>
+        <geometry>
+          <cylinder length="0.113" radius="0.048"/>
+        </geometry>
+      </visual>
+
+      <collision>
+        <geometry>
+          <cylinder length="0.113" radius="0.048"/>
+        </geometry>
+      </collision>
+
+    </link>
+
+    <joint name="t200_joint_${name}" type="fixed">
+      <xacro:insert_block name="origin" />
+      <parent link="base_link"/>
+      <child link="t200_link_${name}"/>
+    </joint>
+
+  </xacro:macro>
+
+  <!-- base_link -->
+  <link name="base_link">
+
+    <inertial>
+      <origin xyz="0 0 ${-HEIGHT / 3}"/> <!-- Center of mass is low -->
+      <mass value="${TOTAL_MASS - 6 * THRUSTER_MASS - ENCLOSURE_MASS}"/>
+      <inertia
+        ixx="1.0" ixy="0.0" ixz="0.0"
+        iyy="1.0" iyz="0.0"
+        izz="1.0"/>
+    </inertial>
+
+    <visual>
+      <geometry>
+        <box size="${WIDTH} ${LENGTH} 0.01"/> <!--TODO eliminate visuals? -->
+      </geometry>
+      <material name="gray">
+        <color rgba="0.5 0.5 0.5 0.5"/>
+      </material>
+    </visual>
+
+    <collision>
+      <geometry>
+        <box size="${WIDTH} ${LENGTH} 0.01"/> <!-- TODO set collision geometry to entire bounding box? -->
+      </geometry>
+    </collision>
+
+  </link>
+
+  <!-- Attach thrusters to the base_link -->
+  <xacro:t200 name="front_right">
+    <origin xyz="0.1 0.15 0" rpy="0 ${PI/2} ${PI*3/4}"/>
+  </xacro:t200>
+  <xacro:t200 name="front_left">
+    <origin xyz="-0.1 0.15 0" rpy="0 ${PI/2} ${PI*1/4}"/>
+  </xacro:t200>
+  <xacro:t200 name="rear_right">
+    <origin xyz="0.1 -0.15 0" rpy="0 ${PI/2} ${PI*5/4}"/>
+  </xacro:t200>
+  <xacro:t200 name="rear_left">
+    <origin xyz="-0.1 -0.15 0" rpy="0 ${PI/2} ${PI*7/4}"/>
+  </xacro:t200>
+  <xacro:t200 name="vertical_right">
+    <origin xyz="0.105 0 0" rpy="0 0 0"/>
+  </xacro:t200>
+  <xacro:t200 name="vertical_left">
+    <origin xyz="-0.105 0 0" rpy="0 0 0"/>
+  </xacro:t200>
+
+  <!-- Electronics enclosure -->
+  <link name="enclosure">
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="${ENCLOSURE_MASS}"/>
+      <inertia
+        ixx="1.0" ixy="0.0" ixz="0.0"
+        iyy="1.0" iyz="0.0"
+        izz="1.0"/>
+    </inertial>
+
+    <visual>
+      <origin rpy="${PI/2} 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder length="0.32" radius="0.055"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.5 0.5"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin rpy="${PI/2} 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder length="0.32" radius="0.055"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+  <!-- Attach electronics enclosure to base link -->
+  <joint name="base_link_to_enclosure" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="enclosure"/>
+  </joint>
+
+  <!--
+    Add Gazebo-specific elements to the base_link. See http://gazebosim.org/tutorials/?tut=ros_urdf for a list of allowed elements. 
+
+    The dampingFactor element is translated to the SDF velocity_decay element, and applies to both linear and angular velocity.
+    0.01 reduces velocity by 1% for each timestep. By default Gazebo runs 1000 timesteps per second, so 0.01 has a very strong effect.
+  -->
+  <gazebo reference="base_link">
+    <dampingFactor>0.002</dampingFactor>
+  </gazebo>
+
+  <!--
+    The BuoyancyPlugin (provided by Gazebo) applies a force that counteracts gravity. Notes:
+    1. there's no concept of a water surface, so positively buoyant objects float up forever
+    2. the force doesn't vary with water depth
+
+    TODO specify a volume for each link, not just the base_link, or remove link refs and let the plugin calc volumes
+    TODO make sure all links have the correct mass and size; make sure foam is high and ballast is low, etc. 
+  -->
+  <gazebo>
+    <plugin name="BuoyancyPlugin" filename="libBuoyancyPlugin.so">
+      <fluid_density>${FLUID_DENSITY}</fluid_density>
+      <link name="base_link">
+        <center_of_volume>0 0 ${HEIGHT / 3}</center_of_volume> <!-- Center of volume is directly above center of mass -->
+        <volume>${TOTAL_MASS / FLUID_DENSITY}</volume> <!-- Assume neutral buoyancy for now -->
+      </link>
+    </plugin>
+  </gazebo>
+
+  <!--
+    The ThrusterPlugin (provided by Orca) turns ROS messages into thrust forces. Each message contains an array of thrust efforts [-1.0, 1.0].
+    The URDF to SDF translation nukes the joints, so we need to copy/paste the joint locations here.
+
+    TODO can I pull the joint poses from the collision rectangles?
+  -->
+  <gazebo>
+    <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so">
+      <ros_topic>/thruster</ros_topic>
+      <thruster name="front_right"> <!-- name attributes are ignored; the tag order must match the message array order -->
+        <force>50</force> <!-- units are Nm, positive for ccw, negative for cw -->
+        <origin xyz="0.1 0.15 0" rpy="0 ${PI/2} ${PI*3/4}"/>
+      </thruster>
+      <thruster name="front_left">
+        <force>50</force>
+        <origin xyz="-0.1 0.15 0" rpy="0 ${PI/2} ${PI*1/4}"/>
+      </thruster>
+      <thruster name="rear_right">
+        <force>-50</force> <!-- cw -->
+        <origin xyz="0.1 -0.15 0" rpy="0 ${PI/2} ${PI*5/4}"/>
+      </thruster>
+      <thruster name="rear_left">
+        <force>-50</force> <!-- cw -->
+        <origin xyz="-0.1 -0.15 0" rpy="0 ${PI/2} ${PI*7/4}"/>
+      </thruster>
+      <thruster name="vertical_right">
+        <force>50</force>
+        <origin xyz="0.105 0 0" rpy="0 0 0"/>
+      </thruster>
+      <thruster name="vertical_left">
+        <force>-50</force> <!-- cw -->
+        <origin xyz="-0.105 0 0" rpy="0 0 0"/>
+      </thruster>
+    </plugin>
+  </gazebo>
+
+  <!--
+    The DepthPlugin (provided by Orca, wraps a Gazebo altimeter sensor) simulates a depth sensor such as the BlueRobotics Bar30.
+  -->
+  <gazebo reference="base_link">
+    <sensor name="depth_sensor" type="altimeter">
+      <update_rate>60</update_rate>
+      <plugin name="DepthPlugin" filename="libDepthPlugin.so">
+        <ros_topic>/depth</ros_topic>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <!--
+    The GazeboRosImuSensor (provided by ROS, wraps a Gazebo IMU sensor) simulates an IMU sensor such as the Phidgets 1044.
+  -->
+  <gazebo reference="base_link">
+    <gravity>true</gravity>
+    <sensor name="imu_sensor" type="imu">
+      <update_rate>100</update_rate>
+      <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
+        <topicName>imu</topicName>
+        <bodyName>base_link</bodyName>
+        <updateRateHZ>100.0</updateRateHZ>
+        <gaussianNoise>0.0</gaussianNoise> <!-- TODO -->
+        <xyzOffset>0 0 0</xyzOffset> <!-- TODO -->
+        <rpyOffset>0 0 0</rpyOffset> <!-- TODO -->
+        <frameName>base_link</frameName>
+      </plugin>
+      <pose>0 0 0 0 0 0</pose> <!-- TODO -->
+    </sensor>
+  </gazebo>
+
+</robot>

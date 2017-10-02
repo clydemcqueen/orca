@@ -1,0 +1,59 @@
+<launch>
+
+  <!-- Filepath for the robot description file; can be overridden -->
+  <arg name="model" default="$(find orca_description)/urdf/orca.urdf.xacro"/>
+
+  <!-- Open the URDF, run the xacro preprocessor, and stuff the result into 'robot_description' on the parameter server -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(arg model)" />
+
+  <!-- Launch some fake state publishers -->
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" /> <!-- TODO need this? -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" /> <!-- TODO need this? -->
+
+  <!-- Launch our console -->
+  <!-- <node name="rviz" pkg="rviz" type="rviz" required="true" /> -->
+
+  <!-- Launch orca_base -->
+  <node name="orca_base" pkg="orca_base" type="orca_base" output="screen"/>
+
+  <!-- Launch the joystick driver -->
+  <node name="joystick" pkg="joy" type="joy_node" output="screen"/>
+
+  <!-- Launch the yaw pid controller -->
+  <node name="yaw_pid" pkg="pid" type="controller">
+    <param name="node_name" value="yaw_pid_node"/>
+    <param name="angle_error" value="true"/> <!-- Treat control variable as an angle in radians -->
+    <param name="Kp" value="0.6" />
+    <param name="Ki" value="0.1" />
+    <param name="Kd" value="0.2" />
+    <param name="upper_limit" value="1" />
+    <param name="lower_limit" value="-1" />
+    <param name="windup_limit" value="1" />
+    <param name="max_loop_frequency" value="100.0" />
+    <param name="min_loop_frequency" value="100.0" />
+    <remap from="pid_enable" to="/yaw_pid_enable" />
+    <remap from="state" to="/yaw_state" />
+    <remap from="setpoint" to="/yaw_setpoint" />
+    <remap from="control_effort" to="/yaw_control_effort" />
+  </node>
+
+  <!-- Launch the depth pid controller -->
+  <node name="depth_pid" pkg="pid" type="controller">
+    <param name="node_name" value="depth_pid_node"/>
+    <param name="Kp" value="0.6" />
+    <param name="Ki" value="0.1" />
+    <param name="Kd" value="0.2" />
+    <param name="upper_limit" value="1" />
+    <param name="lower_limit" value="-1" />
+    <param name="windup_limit" value="1" />
+    <param name="max_loop_frequency" value="100.0" />
+    <param name="min_loop_frequency" value="100.0" />
+    <remap from="pid_enable" to="/depth_pid_enable" />
+    <remap from="state" to="/depth_state" />
+    <remap from="setpoint" to="/depth_setpoint" />
+    <remap from="control_effort" to="/depth_control_effort" />
+  </node>
+
+  <!-- Launch orca_driver TODO -->
+    
+</launch>
