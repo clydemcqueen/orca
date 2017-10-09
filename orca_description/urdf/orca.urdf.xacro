@@ -176,7 +176,7 @@
     <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so">
       <ros_topic>/thruster</ros_topic>
       <thruster name="front_right"> <!-- name attributes are ignored; the tag order must match the message array order -->
-        <force>50</force> <!-- units are Nm, positive for ccw, negative for cw -->
+        <force>50</force> <!-- units are N, positive for ccw, negative for cw -->
         <origin xyz="0.1 0.15 0" rpy="0 ${PI/2} ${PI*3/4}"/>
       </thruster>
       <thruster name="front_left">

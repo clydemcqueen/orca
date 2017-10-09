@@ -32,7 +32,7 @@ namespace gazebo
 // ranges from -1.0 (full reverse) to 1.0 (full forward).
 //
 //    <ros_topic> specifics the topic for Thruster messages. Default is /thruster.
-//    <force> specifies force generated this thruster in Nm. Default is 50Nm. Use negative force for clockwise spin.
+//    <force> specifies force generated this thruster in Newtons. Default is 50N. Use negative force for clockwise spin.
 //    <origin> specifies thruster pose relative to base_link. Default is 0, 0, 0, 0, 0, 0.
 //
 // Note: the ROS URDF to SDF translation drops all fixed joints, collapsing all links into a single link.
@@ -70,7 +70,7 @@ private:
     // Specified in the SDF, and doesn't change:
     gazebo::math::Vector3 xyz;
     gazebo::math::Vector3 rpy;
-    double force; // Nm, use negative numbers for clockwise spin
+    double force; // Newtons, use negative numbers for clockwise spin
 
     // From the latest ROS message:
     double effort; // Range -1.0 to 1.0
