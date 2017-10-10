@@ -2,7 +2,7 @@
 #include <gazebo/sensors/sensors.hh>
 
 #include <ros/ros.h>
-#include "orca_base/Depth.h"
+#include "orca_msgs/Depth.h"
 
 namespace gazebo
 {
@@ -62,7 +62,7 @@ public:
     ROS_INFO("DepthPlugin will publish on ROS topic %s", ros_topic.c_str());
 
     // Set up ROS publisher
-    depth_pub_ = nh_->advertise<orca_base::Depth>(ros_topic, 1);
+    depth_pub_ = nh_->advertise<orca_msgs::Depth>(ros_topic, 1);
 
     // Get the parent sensor
     altimeter_ = std::dynamic_pointer_cast<sensors::AltimeterSensor>(sensor);
@@ -77,7 +77,7 @@ public:
   // The update event is broadcast at the sensor frequency, roughly 60Hz
   void OnUpdate()
   {
-    orca_base::Depth depth_msg;
+    orca_msgs::Depth depth_msg;
     depth_msg.depth = altimeter_->Altitude();
     depth_pub_.publish(depth_msg);
   }

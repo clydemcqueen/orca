@@ -1,9 +1,9 @@
 #include <std_msgs/Bool.h>
 #include "orca_base/orca_util.h"
 #include "orca_base/orca_base.h"
-#include "orca_base/Camera.h"
-#include "orca_base/Lights.h"
-#include "orca_base/Thruster.h"
+#include "orca_msgs/Camera.h"
+#include "orca_msgs/Lights.h"
+#include "orca_msgs/Thruster.h"
 
 // Joy message axes:
 // TODO move to yaml
@@ -69,16 +69,16 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   lights_trim_button_previous_{false}
 {
   // Set up all subscriptions
-  baro_sub_ = nh_.subscribe<orca_base::Depth>("/depth", 10, &OrcaBase::baroCallback, this);
+  baro_sub_ = nh_.subscribe<orca_msgs::Depth>("/depth", 10, &OrcaBase::baroCallback, this);
   imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   yaw_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/yaw_control_effort", 10, &OrcaBase::yawControlEffortCallback, this);
   depth_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
 
   // Advertise all topics that we'll publish on
-  thruster_pub_ = nh_.advertise<orca_base::Thruster>("/thruster", 1);
-  camera_tilt_pub_ = nh_.advertise<orca_base::Camera>("/camera_tilt", 1);
-  lights_pub_ = nh_.advertise<orca_base::Lights>("/lights", 1);
+  thruster_pub_ = nh_.advertise<orca_msgs::Thruster>("/thruster", 1);
+  camera_tilt_pub_ = nh_.advertise<orca_msgs::Camera>("/camera_tilt", 1);
+  lights_pub_ = nh_.advertise<orca_msgs::Lights>("/lights", 1);
   yaw_pid_enable_pub_ = nh_.advertise<std_msgs::Bool>("/yaw_pid_enable", 1);
   yaw_state_pub_ = nh_.advertise<std_msgs::Float64>("/yaw_state", 1);
   yaw_setpoint_pub_ = nh_.advertise<std_msgs::Float64>("/yaw_setpoint", 1);
@@ -88,7 +88,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
 }
 
 // New depth reading
-void OrcaBase::baroCallback(const orca_base::Depth::ConstPtr& baro_msg)
+void OrcaBase::baroCallback(const orca_msgs::Depth::ConstPtr& baro_msg)
 {
   depth_state_ = baro_msg->depth;
 }
@@ -139,14 +139,14 @@ void OrcaBase::publishDepthSetpoint()
 
 void OrcaBase::publishCameraTilt()
 {
-  orca_base::Camera msg;
+  orca_msgs::Camera msg;
   msg.tilt = tilt_;
   camera_tilt_pub_.publish(msg);
 }
 
 void OrcaBase::publishLights()
 {
-  orca_base::Lights msg;
+  orca_msgs::Lights msg;
   msg.brightness = lights_;
   lights_pub_.publish(msg);
 }
@@ -368,7 +368,7 @@ void OrcaBase::SpinOnce(const ros::TimerEvent &event)
   // Set thruster efforts. Note that strafe and yaw are 1.0 for left, -1.0 for right.
   // Order must match the order of the <thruster> tags in the URDF.
   // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
-  orca_base::Thruster thruster_msg;
+  orca_msgs::Thruster thruster_msg;
   thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, -1.0, 1.0));
   thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, -1.0, 1.0));
   thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, -1.0, 1.0));

@@ -18,6 +18,7 @@
   <exec_depend>orca_base</exec_depend>
   <exec_depend>orca_description</exec_depend>
   <exec_depend>orca_gazebo</exec_depend>
+  <exec_depend>orca_msgs</exec_depend>
 
   <export>
     <metapackage/>

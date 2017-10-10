@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(orca_msgs)
+
+## Find catkin and everything we need in ROS
+find_package(catkin REQUIRED COMPONENTS
+  message_generation
+  roscpp
+  rospy
+)
+
+## Generate code for messages we define
+add_message_files(DIRECTORY msg FILES
+  Camera.msg
+  Depth.msg
+  Lights.msg
+  Thruster.msg
+)
+generate_messages()
+
+## Declare a catkin package and export dependencies
+catkin_package(CATKIN_DEPENDS message_runtime)
+
+## Set up include directories
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
+)

@@ -3,7 +3,7 @@
 
   <name>orca_base</name>
   <version>0.0.0</version>
-  <description>Provides basic ROV and AUV functions, including joystick operation, attitude hold, depth hold, and waypoint navigation.</description>
+  <description>Orca base</description>
 
   <maintainer email="clyde@mcqueen.net">Clyde McQueen</maintainer>
   <license>BSD</license>
@@ -15,18 +15,11 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <build_depend>roslint</build_depend>
-  <build_depend>message_generation</build_depend>
-
+  <depend>orca_msgs</depend>
   <depend>roscpp</depend>
   <depend>rospy</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>tf</depend>
-  <depend>orca_description</depend>
-
-  <build_export_depend>message_runtime</build_export_depend>
-
-  <exec_depend>message_runtime</exec_depend>
 
 </package>

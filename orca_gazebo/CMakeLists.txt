@@ -3,10 +3,10 @@ project(orca_gazebo)
 
 # Load catkin and all dependencies required for this package
 find_package(catkin REQUIRED COMPONENTS 
-  roscpp
   gazebo_ros
-  orca_base
-  orca_description
+  orca_msgs
+  roscpp
+  rospy
 )
 
 # Depend on system install of Gazebo
@@ -28,8 +28,8 @@ add_dependencies(DepthPlugin ${catkin_EXPORTED_TARGETS})
 
 catkin_package(
   DEPENDS 
-    roscpp 
     gazebo_ros
-    orca_base
-    orca_description
+    orca_msgs
+    roscpp
+    rospy
 )
