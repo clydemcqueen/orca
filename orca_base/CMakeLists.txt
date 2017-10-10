@@ -11,6 +11,14 @@ find_package(catkin REQUIRED COMPONENTS
   tf
 )
 
+## Declare downstream dependencies
+catkin_package(
+  CATKIN_DEPENDS
+    orca_msgs
+    roscpp
+    rospy
+)
+
 ## Set up include directories
 include_directories(
   include
