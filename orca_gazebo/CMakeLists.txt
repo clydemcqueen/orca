@@ -12,6 +12,15 @@ find_package(catkin REQUIRED COMPONENTS
 # Depend on system install of Gazebo
 find_package(gazebo REQUIRED)
 
+## Declare downstream dependencies
+catkin_package(
+  CATKIN_DEPENDS 
+    gazebo_ros
+    orca_msgs
+    roscpp
+    rospy
+)
+
 link_directories(${GAZEBO_LIBRARY_DIRS})
 include_directories(${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})
 
@@ -25,11 +34,3 @@ add_dependencies(ThrusterPlugin ${catkin_EXPORTED_TARGETS})
 add_library(DepthPlugin src/depth_plugin.cpp) # TODO SHARED?
 target_link_libraries(DepthPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_dependencies(DepthPlugin ${catkin_EXPORTED_TARGETS})
-
-catkin_package(
-  DEPENDS 
-    gazebo_ros
-    orca_msgs
-    roscpp
-    rospy
-)
