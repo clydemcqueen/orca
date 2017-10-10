@@ -1,4 +1,10 @@
-#include <orca_base/orca_driver.h>
+#include "orca_base/orca_driver.h"
+
+extern "C"
+{
+  #include <rc_usefulincludes.h>
+  #include <roboticscape.h>
+}
 
 // Publish messages at 100Hz
 #define SPIN_RATE 100
@@ -48,6 +54,20 @@ void OrcaDriver::SpinOnce(const ros::TimerEvent &event)
 
 int main(int argc, char **argv)
 {
+  // Initialize all devices
+	if(rc_initialize()){
+		fprintf(stderr,"ERROR: failed to run rc_initialize(), are you root?\n");
+		return -1;
+	}
+	
+	rc_set_state(RUNNING);
+	
+	// Shutdown all devices
+	rc_cleanup();
+
+
+
+  // Initialize our ROS node
   ros::init(argc, argv, "orca_driver");
   ros::NodeHandle nh{"~"};
   tf::TransformListener tf{nh};

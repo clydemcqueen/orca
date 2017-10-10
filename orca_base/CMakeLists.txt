@@ -20,9 +20,9 @@ include_directories(
 ## Require C++14
 add_compile_options(-std=c++14)
 
-## Driver -- TODO cross-compile for armf
+## Driver
 add_executable(orca_driver src/orca_driver.cpp)
-target_link_libraries(orca_driver ${catkin_LIBRARIES})
+target_link_libraries(orca_driver /usr/lib/libroboticscape.so ${catkin_LIBRARIES})
 
 ## Base -- TODO split into library and node
 add_executable(orca_base src/orca_base.cpp)
