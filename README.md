@@ -57,9 +57,10 @@ Here's how the buttons are mapped:
 
 ## Code Structure
 
-There are 3 projects:
+There are 4 projects:
+* `orca_msgs` provides message types
+* `orca_description` provides robot description files (urdf, etc.)
 * `orca_base` provides the ROV and AUV code
-  * `orca_driver.cpp` runs on the BeagleBone Blue and provides an interface between the hardware and ROS messages.
-  * `orca_base.cpp` runs on any ROS device and provides ROV and AUV functionality.
-* `orca_description` provides the robot description files.
-* `orca_gazebo` provides the simulation environment.
+  * `orca_driver.cpp` runs on the BeagleBone Blue and provides an interface between the hardware and ROS messages
+  * `orca_base.cpp` runs on any ROS device and provides ROV and AUV functionality
+* `orca_gazebo` provides the simulation environment
