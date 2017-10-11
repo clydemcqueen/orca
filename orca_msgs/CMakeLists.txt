@@ -10,10 +10,12 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## Generate code for messages we define
 add_message_files(DIRECTORY msg FILES
+  Barometer.msg
   Camera.msg
   Depth.msg
   Lights.msg
   Thruster.msg
+  Voltage.msg
 )
 generate_messages()
 
