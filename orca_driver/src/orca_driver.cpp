@@ -73,16 +73,16 @@ void OrcaDriver::Heartbeat()
 void OrcaDriver::PublishBarometer()
 {
   // Read the sensor via I2C
-	if(rc_read_barometer() < 0)
-	{
-	  ROS_WARN("Can't read barometer");
-		return;
-	}
+  if(rc_read_barometer() < 0)
+  {
+    ROS_WARN("Can't read barometer");
+    return;
+  }
 
-	orca_msgs::Barometer msg;
-	msg.temperature = rc_bmp_get_temperature(); // Celsius
-	msg.pressure = rc_bmp_get_pressure_pa() / 100000.0; // Bar
-	barometer_pub_.publish(msg);
+  orca_msgs::Barometer msg;
+  msg.temperature = rc_bmp_get_temperature(); // Celsius
+  msg.pressure = rc_bmp_get_pressure_pa() / 100000.0; // Bar
+  barometer_pub_.publish(msg);
 }
 
 void OrcaDriver::PublishIMU()
@@ -124,48 +124,48 @@ void OrcaDriver::SpinOnce(const ros::TimerEvent &event)
     PublishBarometer();
     // We're using the DMP (digital motion processor), so PublishIMU is called via interrupts
     PublishVoltage();
-	}
+  }
 }
 
 int OrcaDriver::Run()
 {
   // Initialize hardware
-	if (rc_initialize())
-	{
-		ROS_ERROR("rc_initialize failed, are you root?");
-		return -1;
-	}
-	
-	// Initialize the internal barometer
-	if(rc_initialize_barometer(BMP_OVERSAMPLE_4, BMP_FILTER_16) < 0)
-	{
-		ROS_ERROR("rc_initialize_barometer failed");
-		return -1;
-	}
+  if (rc_initialize())
+  {
+    ROS_ERROR("rc_initialize failed, are you root?");
+    return -1;
+  }
+  
+  // Initialize the internal barometer
+  if(rc_initialize_barometer(BMP_OVERSAMPLE_4, BMP_FILTER_16) < 0)
+  {
+    ROS_ERROR("rc_initialize_barometer failed");
+    return -1;
+  }
 
 #ifdef ENABLE_IMU
-	// Initialize the IMU
-	rc_imu_config_t conf = rc_default_imu_config();
-	conf.enable_magnetometer = 1; // Turn on the compass
-	conf.dmp_sample_rate = SPIN_RATE; // Sample at our spin rate
-	if (rc_initialize_imu_dmp(&imu_buffer_, conf))
-	{
-		ROS_ERROR("rc_initialize_imu_dmp failed");
-		return -1;
-	}
+  // Initialize the IMU
+  rc_imu_config_t conf = rc_default_imu_config();
+  conf.enable_magnetometer = 1; // Turn on the compass
+  conf.dmp_sample_rate = SPIN_RATE; // Sample at our spin rate
+  if (rc_initialize_imu_dmp(&imu_buffer_, conf))
+  {
+    ROS_ERROR("rc_initialize_imu_dmp failed");
+    return -1;
+  }
 #endif
-	
-	// Initialize the external barometer
-	// TODO
-	
-	// Initialize the leak detector
-	// TODO
-	
-	// Initialize the servos
-	// TODO
-	
-	// Initialize the ESCs
-	// TODO
+  
+  // Initialize the external barometer
+  // TODO
+  
+  // Initialize the leak detector
+  // TODO
+  
+  // Initialize the servos
+  // TODO
+  
+  // Initialize the ESCs
+  // TODO
 
   ROS_INFO("Hardware initialized");
   
@@ -186,7 +186,7 @@ int OrcaDriver::Run()
   rc_power_off_imu();
 #endif
   rc_power_off_barometer();
-	rc_cleanup();
+  rc_cleanup();
 
   return 0;
 }
