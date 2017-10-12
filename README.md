@@ -6,11 +6,11 @@ Orca is a [ROS](http://ros.org) driver for [BlueRobotics BlueROV2](https://www.b
 
 * [BlueRobotics BlueROV2](https://www.bluerobotics.com/store/rov/bluerov2/) or similar ROV. The BlueROV2 has 6 thrusters in a 4-DOF vectored configuration, but you can modify the code to support other hardware platforms.
 * [BeagleBone Blue](https://beagleboard.org/blue) controller. This replaces the Pixhawk2 controller that comes with the BlueROV2.
-* Xbox One gamepad, or another device that's supported by the ROS joystick controller.
+* Xbox One gamepad, or another device that's supported by the ROS joystick driver.
 
 ## Install
 
-*Current status: Orca runs in [Gazebo](http://gazebosim.org/), a SITL (software-in-the-loop) simulator. Use the instructions below to install ROS, Gazebo and Orca.*
+*Current status: a very early version of Orca runs in [Gazebo](http://gazebosim.org/), a SITL (software-in-the-loop) simulator. Use the instructions below to install ROS, Gazebo and Orca on your desktop or laptop.*
 
 Install [ROS Kinetic](http://wiki.ros.org/Installation/Ubuntu). Select `ros-kinetic-desktop-full`; this will install Gazebo 7.0 as well.
 
@@ -33,7 +33,7 @@ Download and compile Orca:
 cd ~/catkin_ws/src
 git clone https://github.com/clydemcqueen/orca.git
 cd ..
-catkin_make
+catkin_make --pkg orca_msgs orca_description orca_base orca_gazebo
 ~~~~
 
 Run the simulation:
@@ -57,10 +57,9 @@ Here's how the buttons are mapped:
 
 ## Code Structure
 
-There are 4 projects:
+There are 5 projects:
 * `orca_msgs` provides message types
 * `orca_description` provides robot description files (urdf, etc.)
-* `orca_base` provides the ROV and AUV code
-  * `orca_driver.cpp` runs on the BeagleBone Blue and provides an interface between the hardware and ROS messages
-  * `orca_base.cpp` runs on any ROS device and provides ROV and AUV functionality
+* `orca_driver` provides the interface between the BeagleBone Blue and ROS
+* `orca_base` provides the ROV and AUV functionality
 * `orca_gazebo` provides the simulation environment

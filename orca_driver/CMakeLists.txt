@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(orca_base)
+project(orca_driver)
 
 ## Find catkin and everything we need in ROS
 find_package(catkin REQUIRED COMPONENTS
@@ -28,6 +28,6 @@ include_directories(
 ## Require C++14
 add_compile_options(-std=c++14)
 
-## Base -- TODO split into library and node
-add_executable(orca_base src/orca_base.cpp)
-target_link_libraries(orca_base ${catkin_LIBRARIES})
+## Driver
+add_executable(orca_driver src/orca_driver.cpp)
+target_link_libraries(orca_driver /usr/lib/libroboticscape.so ${catkin_LIBRARIES})
