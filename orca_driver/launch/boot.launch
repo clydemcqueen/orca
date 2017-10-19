@@ -1,0 +1,6 @@
+<launch>
+
+  <!-- Launch orca_driver -->
+  <node name="orca_driver" pkg="orca_driver" type="orca_driver" output="screen"/>
+
+</launch>
