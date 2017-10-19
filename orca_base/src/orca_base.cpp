@@ -34,13 +34,21 @@
 // Unused buttons:
 // 8 Logo
 
+// Limits
+#define THRUSTER_MIN -1.0
+#define THRUSTER_MAX  1.0
+#define TILT_MIN     -45
+#define TILT_MAX      45
+#define LIGHTS_MIN    0.0
+#define LIGHTS_MAX    1.0
+
 // Trim increments
 // TODO move to yaml
 #define PI          3.14159
 #define INC_YAW     PI/36
 #define INC_DEPTH   0.1
-#define INC_TILT    0.2   // Values range -1.0 to 1.0
-#define INC_LIGHTS  0.2   // Values range 0.0 to 1.0
+#define INC_TILT    5
+#define INC_LIGHTS  0.2
 
 // Don't respond to tiny joystick movements
 // TODO move to yaml
@@ -69,6 +77,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   lights_trim_button_previous_{false}
 {
   // Set up all subscriptions
+  // TODO move topics to yaml
   baro_sub_ = nh_.subscribe<orca_msgs::Depth>("/depth", 10, &OrcaBase::baroCallback, this);
   imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
@@ -76,6 +85,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   depth_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
 
   // Advertise all topics that we'll publish on
+  // TODO move topics to yaml
   thruster_pub_ = nh_.advertise<orca_msgs::Thruster>("/thruster", 1);
   camera_tilt_pub_ = nh_.advertise<orca_msgs::Camera>("/camera_tilt", 1);
   lights_pub_ = nh_.advertise<orca_msgs::Lights>("/lights", 1);
@@ -203,7 +213,7 @@ void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
 
   if (mode == Mode::disarmed)
   {
-    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = 0;
+    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = 0.0;
   }
 }
 
@@ -229,7 +239,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     return;
   }
 
-  // Select a mode
+  // Mode
   if (joy_msg->buttons[JOY_BUTTON_MANUAL])
   {
     ROS_INFO("Manual");
@@ -252,28 +262,26 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 
   // Yaw trim
-  // TODO support faster trim method?
-  if (joy_msg->axes[JOY_AXIS_YAW_TRIM] && !yaw_trim_button_previous_)
+  if (joy_msg->axes[JOY_AXIS_YAW_TRIM] != 0.0 && !yaw_trim_button_previous_)
   {
     // Rising edge
     if ((mode_ == Mode::stabilize || mode_ == Mode::depth_hold))
     {
       // TODO deal w/ wraparound
-      yaw_setpoint_ = joy_msg->axes[JOY_AXIS_YAW_TRIM] > 0 ? yaw_setpoint_ + INC_YAW : yaw_setpoint_ - INC_YAW;
+      yaw_setpoint_ = joy_msg->axes[JOY_AXIS_YAW_TRIM] > 0.0 ? yaw_setpoint_ + INC_YAW : yaw_setpoint_ - INC_YAW;
       publishYawSetpoint();
     }
 
     yaw_trim_button_previous_ = true;
   }
-  else
+  else if (joy_msg->axes[JOY_AXIS_YAW_TRIM] == 0.0 && yaw_trim_button_previous_)
   {
     // Falling edge
     yaw_trim_button_previous_ = false;
   }
 
   // Depth trim
-  // TODO support faster trim method?
-  if (joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] && !depth_trim_button_previous_)
+  if (joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] != 0.0 && !depth_trim_button_previous_)
   {
     // Rising edge
     if (mode_ == Mode::depth_hold)
@@ -285,55 +293,41 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 
     depth_trim_button_previous_ = true;
   }
-  else
+  else if (joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] == 0.0 && depth_trim_button_previous_)
   {
     // Falling edge
     depth_trim_button_previous_ = false;
   }
 
   // Camera tilt
-  if (!tilt_trim_button_previous_)
+  if ((joy_msg->buttons[JOY_CAMERA_TILT_UP] || joy_msg->buttons[JOY_CAMERA_TILT_DOWN]) && !tilt_trim_button_previous_)
   {
-    if (joy_msg->buttons[JOY_CAMERA_TILT_UP])
-    {
-      tilt_ = clamp(tilt_ + INC_TILT, -1.0, 1.0);
-      publishCameraTilt();
-      tilt_trim_button_previous_ = true;
-    }
-    else if (joy_msg->buttons[JOY_CAMERA_TILT_DOWN])
-    {
-      tilt_ = clamp(tilt_ - INC_TILT, -1.0, 1.0);
-      publishCameraTilt();
-      tilt_trim_button_previous_ = true;    
-    }
-    else
-    {
-      tilt_trim_button_previous_ = false;
-    }
+    // Rising edge
+    tilt_ = clamp(joy_msg->buttons[JOY_CAMERA_TILT_UP] ? tilt_ + INC_TILT : tilt_ - INC_TILT, TILT_MIN, TILT_MAX);
+    publishCameraTilt();
+    tilt_trim_button_previous_ = true;
+  }
+  else if (!joy_msg->buttons[JOY_CAMERA_TILT_UP] && !joy_msg->buttons[JOY_CAMERA_TILT_DOWN] && tilt_trim_button_previous_)
+  {
+    // Falling edge
+    tilt_trim_button_previous_ = false;
   }
 
   // Lights
-  if (!lights_trim_button_previous_)
+  if ((joy_msg->buttons[JOY_LIGHTS_BRIGHT] || joy_msg->buttons[JOY_LIGHTS_DIM]) && !lights_trim_button_previous_)
   {
-    if (joy_msg->buttons[JOY_LIGHTS_BRIGHT])
-    {
-      lights_ = clamp(lights_ + INC_LIGHTS, 0.0, 1.0);
-      publishLights();
-      lights_trim_button_previous_ = true;
-    }
-    else if (joy_msg->buttons[JOY_LIGHTS_DIM])
-    {
-      lights_ = clamp(lights_ - INC_LIGHTS, 0.0, 1.0);
-      publishLights();
-      lights_trim_button_previous_ = true;
-    }
-    else
-    {
-      lights_trim_button_previous_ = false;      
-    }
+  // Rising edge
+    lights_ = clamp(joy_msg->buttons[JOY_LIGHTS_BRIGHT] ? lights_ + INC_LIGHTS : lights_ - INC_LIGHTS, LIGHTS_MIN, LIGHTS_MAX);
+    publishLights();
+    lights_trim_button_previous_ = true;
+  }
+  else if (!joy_msg->buttons[JOY_LIGHTS_BRIGHT] && !joy_msg->buttons[JOY_LIGHTS_DIM] && lights_trim_button_previous_)
+  {
+    // Falling edge
+    lights_trim_button_previous_ = false;      
   }
 
-  // Respond to thruster controls
+  // Thrusters
   forward_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_FORWARD], INPUT_DEAD_BAND);
   if (mode_ == Mode::manual)
   {
@@ -347,7 +341,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 }
 
 // Called at 100Hz; publish various messages
-void OrcaBase::SpinOnce(const ros::TimerEvent &event)
+void OrcaBase::spinOnce(const ros::TimerEvent &event)
 {
   // Set target yaw
   if (mode_ == Mode::stabilize || mode_ == Mode::depth_hold)
@@ -365,16 +359,16 @@ void OrcaBase::SpinOnce(const ros::TimerEvent &event)
     depth_state_pub_.publish(depth_state);
   }
 
-  // Set thruster efforts. Note that strafe and yaw are 1.0 for left, -1.0 for right.
+  // Set thruster efforts. Note that strafe and yaw areTHRUSTER_MAX for left, THRUSTER_MIN for right.
   // Order must match the order of the <thruster> tags in the URDF.
   // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
   orca_msgs::Thruster thruster_msg;
-  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, -1.0, 1.0));
-  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, -1.0, 1.0));
-  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, -1.0, 1.0));
-  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, -1.0, 1.0));
-  thruster_msg.effort.push_back(clamp(vertical_effort_, -1.0, 1.0));
-  thruster_msg.effort.push_back(clamp(-vertical_effort_, -1.0, 1.0));
+  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thruster_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thruster_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
   thruster_pub_.publish(thruster_msg);
 
   // TODO publish odometry
@@ -389,7 +383,7 @@ int main(int argc, char **argv)
   tf::TransformListener tf{nh};
   orca_base::OrcaBase orca_base{nh, tf};
 
-  ros::Timer t = nh.createTimer(ros::Duration(1.0 / SPIN_RATE), &orca_base::OrcaBase::SpinOnce, &orca_base);
+  ros::Timer t = nh.createTimer(ros::Duration(1.0 / SPIN_RATE), &orca_base::OrcaBase::spinOnce, &orca_base);
 
   ros::spin();
 

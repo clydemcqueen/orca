@@ -44,7 +44,7 @@ private:
   double vertical_effort_;
 
   // Camera tilt
-  double tilt_;
+  int tilt_;
   bool tilt_trim_button_previous_;
 
   // Lights
@@ -87,7 +87,7 @@ public:
   explicit OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf);
   ~OrcaBase() {}; // Suppress default copy and move constructors
 
-  void SpinOnce(const ros::TimerEvent &event);
+  void spinOnce(const ros::TimerEvent &event);
 };
 
 } // namespace orca_base

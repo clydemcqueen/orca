@@ -1,1 +1,1 @@
-float32 tilt
+int32 tilt

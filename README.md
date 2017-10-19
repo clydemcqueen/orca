@@ -33,7 +33,7 @@ Download and compile Orca:
 cd ~/catkin_ws/src
 git clone https://github.com/clydemcqueen/orca.git
 cd ..
-catkin_make --pkg orca_msgs orca_description orca_base orca_gazebo
+catkin_make --only-pkg-with-deps orca_msgs orca_description orca_base orca_gazebo
 ~~~~
 
 Run the simulation:
