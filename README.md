@@ -1,12 +1,18 @@
 # Orca #
 
-Orca is a [ROS](http://ros.org) driver for [BlueRobotics BlueROV2](https://www.bluerobotics.com/store/rov/bluerov2/) and [BeagleBone Blue](https://beagleboard.org/blue). Version 1.0 will support ROV functions; subsequent versions will add AUV functions.
+Orca is a [ROS](http://ros.org) driver for [BlueRobotics BlueROV2](https://www.bluerobotics.com/store/rov/bluerov2/). Version 1.0 will support basic ROV functions; subsequent versions will add AUV functions.
 
-## Hardware Requirements
+Orca does not use the Pixhawk controller that comes with the BlueROV2, and does not support [mavros](http://wiki.ros.org/mavros), [ArduSub](https://www.ardusub.com/) or [QGroundControl](http://qgroundcontrol.com/).
 
-* [BlueRobotics BlueROV2](https://www.bluerobotics.com/store/rov/bluerov2/) or similar ROV. The BlueROV2 has 6 thrusters in a 4-DOF vectored configuration, but you can modify the code to support other hardware platforms.
-* [BeagleBone Blue](https://beagleboard.org/blue) controller. This replaces the Pixhawk2 controller that comes with the BlueROV2.
-* Xbox One gamepad, or another device that's supported by the ROS joystick driver.
+## Tested Hardware
+
+* [BlueRobotics BlueROV2](https://www.bluerobotics.com/store/rov/bluerov2/)
+* [BlueRobotics Low-Light HD USB Camera](https://www.bluerobotics.com/store/electronics/cam-usb-low-light-r1/)
+* [BlueRobotics Bar30 Depth Sensor](https://www.bluerobotics.com/store/electronics/bar30-sensor-r1/)
+* [Pololu Maestro controller](https://www.pololu.com/product/1354)
+* [PhidgetSpatial Precision 3/3/3 High Resolution IMU](https://www.phidgets.com/?tier=3&catid=10&pcid=8&prodid=32)
+* Raspberry Pi 3
+* Xbox One gamepad
 
 ## Install
 
@@ -41,9 +47,7 @@ Run the simulation:
 roslaunch orca_gazebo orca.launch
 ~~~~
 
-Plug in your gamepad, hit the [menu button](https://support.xbox.com/en-US/xbox-one/accessories/xbox-one-wireless-controller) to arm the thrusters and start driving around.
-
-Here's how the buttons are mapped:
+Plug in your gamepad, hit the [menu button](https://support.xbox.com/en-US/xbox-one/accessories/xbox-one-wireless-controller) to arm the thrusters and start driving around. Here's how the buttons are mapped:
 * Left stick up/down is forward/reverse
 * Left stick left/right is yaw left/right
 * Right stick up/down is ascend/descend
@@ -60,6 +64,6 @@ Here's how the buttons are mapped:
 There are 5 projects:
 * `orca_msgs` provides message types
 * `orca_description` provides robot description files (urdf, etc.)
-* `orca_driver` provides the interface between the BeagleBone Blue and ROS
+* `orca_driver` provides the interface between the hardware and ROS (not required for simulations)
 * `orca_base` provides the ROV and AUV functionality
 * `orca_gazebo` provides the simulation environment

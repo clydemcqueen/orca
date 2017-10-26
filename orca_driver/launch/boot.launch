@@ -3,4 +3,7 @@
   <!-- Launch orca_driver -->
   <node name="orca_driver" pkg="orca_driver" type="orca_driver" output="screen"/>
 
+  <!-- Launch Phidgets IMU driver -->
+  <include file="$(find phidgets_imu)/launch/imu.launch"/>
+
 </launch>

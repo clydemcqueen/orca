@@ -28,6 +28,6 @@ include_directories(
 ## Require C++14
 add_compile_options(-std=c++14)
 
-## Base -- TODO split into library and node
+## Base
 add_executable(orca_base src/orca_base.cpp)
 target_link_libraries(orca_base ${catkin_LIBRARIES})

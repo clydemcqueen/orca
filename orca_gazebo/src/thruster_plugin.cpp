@@ -31,7 +31,7 @@ namespace gazebo
 // the number and order of float32s in the Thruster message. Each float indicates effort and
 // ranges from -1.0 (full reverse) to 1.0 (full forward).
 //
-//    <ros_topic> specifics the topic for Thruster messages. Default is /thruster.
+//    <ros_topic> specifics the topic for Thruster messages. Default is /thrusters.
 //    <force> specifies force generated this thruster in Newtons. Default is 50N. Use negative force for clockwise spin.
 //    <origin> specifies thruster pose relative to base_link. Default is 0, 0, 0, 0, 0, 0.
 //
@@ -110,7 +110,7 @@ public:
     nh_.reset(new ros::NodeHandle("thruster_plugin"));
 
     // Look for our ROS topic
-    std::string ros_topic = "/thruster";
+    std::string ros_topic = "/thrusters";
     if (sdf->HasElement("ros_topic"))
     {
       ros_topic = sdf->GetElement("ros_topic")->Get<std::string>();

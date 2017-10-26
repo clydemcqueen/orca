@@ -1,209 +1,180 @@
-#include "orca_driver/orca_util.h"
 #include "orca_driver/orca_driver.h"
-#include "orca_msgs/Barometer.h"
-#include "orca_msgs/Voltage.h"
 
-#define SPIN_RATE   50
-#define BLINK_RATE  4
+// TODO move defines to yaml
 
-#define INPUT_DEAD_BAND 0.05
+#define SPIN_RATE 50
 
-// BlueRobotics T200 thruster PWM settings
-#define THRUSTER_DEAD_BAND  25      // Thruster dead band, +/-
-#define THRUSTER_OFF        1500    // Thruster off, as well as midpoint of range
-#define THRUSTER_RANGE      400     // Thruster range is OFF +/- 400, or 1100 (full reverse) to 1900 (full forward)
-
-// PWM channel assignments
-#define PWM_THRUSTER1     1
-#define PWM_THRUSTER2     2
-#define PWM_THRUSTER3     3
-#define PWM_THRUSTER4     4
-#define PWM_THRUSTER5     5
-#define PWM_THRUSTER6     6
-#define PWM_LIGHTS        7
-#define PWM_CAMERA_TILT   8
-
-// TODO resolve I2C contention problem
-#undef ENABLE_IMU
+// Maestro channel assignments
+#define THRUSTER_1_CHANNEL  0
+#define THRUSTER_2_CHANNEL  1
+#define THRUSTER_3_CHANNEL  2
+// Leave a gap
+#define THRUSTER_4_CHANNEL  4
+#define THRUSTER_5_CHANNEL  5
+#define THRUSTER_6_CHANNEL  6
+// Leave a gap
+#define LIGHTS_CHANNEL      8
+#define TILT_CHANNEL        9
+// Leave a gap
+#define VOLTAGE_CHANNEL    11
+#define LEAK_CHANNEL       12
 
 namespace orca_driver {
-
-// The IMU requires a 'void (*)()' callback, so create an object wrapper
-OrcaDriver* g_driver = nullptr;
-void imu_callback()
-{
-  g_driver->publishIMU();
-}
-
-// Convert effort [-1.0, 1.0] to PWM
-int thrusterValue(float input)
-{
-  if (input < INPUT_DEAD_BAND && input > -INPUT_DEAD_BAND)
-  {
-    return THRUSTER_OFF;
-  }
-  else if (input >= 1.0)
-  {
-    return THRUSTER_OFF + THRUSTER_RANGE; // Clip high
-  }
-  else if (input <= -1.0)
-  {
-    return THRUSTER_OFF - THRUSTER_RANGE; // Clip low
-  }
-  else
-  {
-    return THRUSTER_OFF + THRUSTER_RANGE * input;
-  }
-}
 
 OrcaDriver::OrcaDriver(ros::NodeHandle &nh, tf::TransformListener &tf) :
   nh_{nh},
   tf_{tf},
-  loop_counter_{0},
-  led_on_{false}
+  thruster_channels_{THRUSTER_1_CHANNEL, THRUSTER_2_CHANNEL, THRUSTER_3_CHANNEL, THRUSTER_4_CHANNEL, THRUSTER_5_CHANNEL, THRUSTER_6_CHANNEL}
 {
-  imu_msg_.header.frame_id = "base_link";
-  // TODO imu_msg_.orientation_covariance
-  // TODO img_msg_.angular_velocity_covariance
-  // TODO imu_msg_.linear_acceleration_covariance
-  
-  // Set up all subscriptions
+  // Set up subscriptions
   camera_tilt_sub_ = nh_.subscribe<orca_msgs::Camera>("/camera_tilt", 10, &OrcaDriver::cameraTiltCallback, this);
-
-  // Advertise all topics that we'll publish on
-  barometer_pub_ = nh_.advertise<orca_msgs::Barometer>("/internal_barometer", 1);
-  imu_pub_ = nh_.advertise<sensor_msgs::Imu>("/imu", 1);
-  voltage_pub_ = nh_.advertise<orca_msgs::Voltage>("/voltage", 1);
+  lights_sub_ = nh_.subscribe<orca_msgs::Lights>("/lights", 10, &OrcaDriver::lightsCallback, this);
+  thruster_sub_ = nh_.subscribe<orca_msgs::Thrusters>("/thrusters", 10, &OrcaDriver::thrustersCallback, this);
+  
+  // Advertise topics that we'll publish on
+  battery_pub_ = nh_.advertise<orca_msgs::Battery>("/battery", 1);
+  leak_pub_ = nh_.advertise<orca_msgs::Leak>("/leak", 1);
 }
 
 void OrcaDriver::cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg)
 {
-  // Input is -1.0 (down 45deg) to 1.0 (up 45deg); output is 1100us to 1900us
-  // TODO rename thrusterValue, move to util
-  rc_send_servo_pulse_us(PWM_CAMERA_TILT, thrusterValue(-msg->tilt));
-}
-
-// Blink an LED to indicate that we're alive
-void OrcaDriver::heartbeat()
-{
-    loop_counter_++;
-    if (loop_counter_ >= SPIN_RATE / BLINK_RATE / 2)
-    {
-      loop_counter_ = 0;
-      led_on_ = !led_on_;
-      rc_set_led(GREEN, led_on_ ? ON : OFF);
-    }
-}
-
-void OrcaDriver::publishBarometer()
-{
-  // Read the sensor via I2C
-  if(rc_read_barometer() < 0)
+  if (maestro_.ready())
   {
-    ROS_WARN("Can't read barometer");
-    return;
+    maestro_.set_pwm(TILT_CHANNEL, servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900));
   }
-
-  orca_msgs::Barometer msg;
-  msg.temperature = rc_bmp_get_temperature(); // Celsius
-  msg.pressure = rc_bmp_get_pressure_pa() / 100000.0; // Bar
-  barometer_pub_.publish(msg);
+  else
+  {
+    ROS_ERROR("Can't tilt camera");
+  }
 }
 
-void OrcaDriver::publishIMU()
+void OrcaDriver::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
 {
-  // We're called when the data is ready and sitting in imu_buffer_
-  imu_msg_.header.stamp = ros::Time::now();
-  imu_msg_.orientation.w = imu_buffer_.dmp_quat[QUAT_W];
-  imu_msg_.orientation.x = imu_buffer_.dmp_quat[QUAT_X];
-  imu_msg_.orientation.y = imu_buffer_.dmp_quat[QUAT_Y];
-  imu_msg_.orientation.z = imu_buffer_.dmp_quat[QUAT_Z];
-  imu_msg_.angular_velocity.x = imu_buffer_.gyro[0];
-  imu_msg_.angular_velocity.y = imu_buffer_.gyro[1];
-  imu_msg_.angular_velocity.z = imu_buffer_.gyro[2];
-  imu_msg_.linear_acceleration.x = imu_buffer_.accel[0];
-  imu_msg_.linear_acceleration.y = imu_buffer_.accel[1];
-  imu_msg_.linear_acceleration.z = imu_buffer_.accel[2];
-  imu_pub_.publish(imu_msg_);
+  if (maestro_.ready())
+  {
+    maestro_.set_pwm(LIGHTS_CHANNEL, servo_pulse_width(-msg->brightness, 0, 100, 1100, 1900));
+  }
+  else
+  {
+    ROS_ERROR("Can't set brightness");
+  }
 }
 
-void OrcaDriver::publishVoltage()
+void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
 {
-  orca_msgs::Voltage msg;
-  msg.voltage = rc_dc_jack_voltage();
-  voltage_pub_.publish(msg);
+  if (maestro_.ready())
+  {
+    for (int i = 0; i < thruster_channels_.size(); ++i)
+    {
+      maestro_.set_pwm(thruster_channels_[i], servo_pulse_width(msg->effort[i], -1.0, 1.0, 1100, 1900));
+    }
+  }
+  else
+  {
+    ROS_ERROR("Can't operate thrusters");
+  }
+}
+
+bool OrcaDriver::readBattery()
+{
+  float temp;
+  if (maestro_.ready() && maestro_.get_analog(VOLTAGE_CHANNEL, temp))
+  {
+    battery_msg_.voltage = temp * 4; // Compensate for the 1/4 voltage divider
+    return true;
+  }
+  else
+  {
+    ROS_ERROR("Can't read battery");
+    return false;  
+  }
+}
+
+bool OrcaDriver::readLeak()
+{
+  bool temp;
+  if (maestro_.ready() && maestro_.get_digital(LEAK_CHANNEL, temp))
+  {
+    leak_msg_.leak_detected = temp ? 1 : 0; // TODO why isn't this a bool in the message?
+    return true;
+  }
+  else
+  {
+    ROS_ERROR("Can't read leak sensor");
+    return false;  
+  }
 }
 
 void OrcaDriver::spinOnce()
 {
-  heartbeat();
-  publishBarometer();
-  // We're using the DMP (digital motion processor), so PublishIMU is called via interrupts
-  publishVoltage();
+  if (readBattery()) battery_pub_.publish(battery_msg_);
+  if (readLeak()) leak_pub_.publish(leak_msg_);
 }
 
-int OrcaDriver::run()
+// Run a bunch of pre-dive checks, return true if everything looks good
+bool OrcaDriver::preDive()
 {
-  // Initialize the hardware
-  if (rc_initialize())
+  ROS_INFO("Running pre-dive checks...");
+
+  if (!readBattery() || !readLeak())
   {
-    ROS_ERROR("rc_initialize failed, are you root?");
-    return -1;
+    maestro_.disconnect();
+    return false;
   }
 
-  rc_set_led(RED, ON);
-  
-  // Initialize the internal barometer
-  if(rc_initialize_barometer(BMP_OVERSAMPLE_4, BMP_FILTER_16) < 0)
+  ROS_INFO("Voltage %g, leak %d", battery_msg_.voltage, leak_msg_.leak_detected);
+
+  if (leak_msg_.leak_detected)
   {
-    ROS_ERROR("rc_initialize_barometer failed");
-    return -1;
+    ROS_ERROR("Leak detected");
+    maestro_.disconnect();
+    return false;
   }
 
-#ifdef ENABLE_IMU
-  // Initialize the IMU
-  rc_imu_config_t conf = rc_default_imu_config();
-  conf.enable_magnetometer = 1; // Turn on the compass
-  conf.dmp_sample_rate = SPIN_RATE; // Sample at our spin rate
-  if (rc_initialize_imu_dmp(&imu_buffer_, conf))
+  if (battery_msg_.voltage < 12.0) // TODO threshold move to yaml
   {
-    ROS_ERROR("rc_initialize_imu_dmp failed");
-    return -1;
+    ROS_ERROR("Battery voltage %g too low", battery_msg_.voltage);
+    maestro_.disconnect();
+    return false;
   }
-#endif
-  
-  // Initialize the external barometer
-  // TODO
-  
-  // Initialize the leak detector
-  // TODO
-  
-  // Initialize the servos
-  rc_enable_servo_power_rail(); // Be sure to clip the power wire on all ESCs!
-  rc_send_servo_pulse_us(PWM_CAMERA_TILT, 1300);
-  rc_usleep(100000L);
-  rc_send_servo_pulse_us(PWM_CAMERA_TILT, 1700);
-  rc_usleep(100000L);
-  rc_send_servo_pulse_us(PWM_CAMERA_TILT, 1500);
-  rc_usleep(100000L);
-  
-  // Initialize the ESCs
-  // TODO
-  rc_send_servo_pulse_us(PWM_THRUSTER1, 1500);
-  rc_usleep(1000000L);
-  
-  ROS_INFO("Hardware initialized");
-  rc_set_led(RED, OFF);
-  
-#ifdef ENABLE_IMU
-  // Set the IMU callback; calls will start immediately
-  g_driver = this;
-  rc_set_imu_interrupt_func(&imu_callback);
-#endif
-  
-  // Run our loop
+
+  for (int i = 0; i < thruster_channels_.size(); ++i)
+  {
+    unsigned short value;
+    maestro_.get_pwm(thruster_channels_[i], value);
+    if (value != 1500)
+    {
+      ROS_ERROR("Thruster %d didn't initialize (possibly others)", i + 1);
+      maestro_.disconnect();
+      return false;
+    }
+  }
+
+  ROS_INFO("Pre-dive checks passed");
+  return true;
+}
+
+// Main entry point
+bool OrcaDriver::run()
+{
+  std::string port = "/dev/ttyACM0"; // TODO move to yaml
+  ROS_INFO("Opening port %s...", port.c_str());
+  maestro_.connect(port);
+  if (!maestro_.ready())
+  {
+    ROS_ERROR("Can't open port %s, are you root?", port.c_str());
+    return false;
+  }
+  ROS_INFO("Port %s open", port.c_str());
+
+  if (!preDive())
+  {
+    return false;
+  }
+
+  ROS_INFO("Entering main loop");  
   ros::Rate r(SPIN_RATE);
-  while (rc_get_state() != EXITING)
+  while (ros::ok())
   {
     // Do our work
     spinOnce();
@@ -215,51 +186,30 @@ int OrcaDriver::run()
     r.sleep();
   }
 
-  ROS_INFO("Somebody hit Ctrl-C; cleaning up");
-
-  // Turn off ESCs
-  // TODO
-  
-  // Turn off servos
-  rc_disable_servo_power_rail();
-  
-  // Turn off leak detector
-  // TODO
-  
-  // Turn off external barometer
-  // TODO
-  
-#ifdef ENABLE_IMU
-  // Turn off IMU
-  rc_stop_imu_interrupt_func();
-  g_driver = nullptr;
-  rc_power_off_imu();
-#endif
-
-  // Turn off internal barometer
-  rc_power_off_barometer();
-  
-  // Turn off the hardware 
-  rc_cleanup();
-
-  return 0;
+  maestro_.disconnect();
+  return true;
 }
 
 } // namespace orca_driver
 
 int main(int argc, char **argv)
 {
-  // Initialize ROS _before_ firing up the robotics cape
+  // Initialize ROS
   ros::init(argc, argv, "orca_driver");
   ros::NodeHandle nh{"~"};
-  tf::TransformListener tf{nh};
-  orca_driver::OrcaDriver orca_driver{nh, tf};
-  ROS_INFO("ROS initialized");
+  tf::TransformListener tf{nh}; // TODO might not need a transform listener, depends on odom implementation
 
-  int rc = orca_driver.run();
-  
-  // Shutdown ROS
-  ros::shutdown();
-  
-  return rc;
+  // Run the driver; in normal use the power will be yanked and run() will never return
+  orca_driver::OrcaDriver orca_driver{nh, tf};
+  if (orca_driver.run())
+  {
+    // Normal exit (Ctrl-C) during testing, ROS has already been shut down
+    return 0;
+  }
+  else
+  {
+    // Orca failure during testing, hopefully we logged some decent diagnostics
+    ros::shutdown();
+    return -1;
+  }
 }

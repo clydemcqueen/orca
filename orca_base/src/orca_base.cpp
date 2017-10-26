@@ -1,12 +1,12 @@
 #include <std_msgs/Bool.h>
-#include "orca_base/orca_util.h"
 #include "orca_base/orca_base.h"
 #include "orca_msgs/Camera.h"
 #include "orca_msgs/Lights.h"
 #include "orca_msgs/Thruster.h"
 
+// TODO move defines to yaml
+
 // Joy message axes:
-// TODO move to yaml
 #define JOY_AXIS_YAW            0   // Left stick left/right; 1.0 is left and -1.0 is right
 #define JOY_AXIS_FORWARD        1   // Left stick up/down; 1.0 is forward and -1.0 is backward
 #define JOY_AXIS_STRAFE         3   // Right stick left/right; 1.0 is left and -1.0 is right
@@ -19,7 +19,6 @@
 // 5 Right trigger; starts from 1.0 and moves to -1.0
 
 // Joy message buttons:
-// TODO move to yaml
 #define JOY_BUTTON_DISARM       6   // View
 #define JOY_BUTTON_ARM          7   // Menu
 #define JOY_BUTTON_MANUAL       0   // A
@@ -43,7 +42,6 @@
 #define LIGHTS_MAX    1.0
 
 // Trim increments
-// TODO move to yaml
 #define PI          3.14159
 #define INC_YAW     PI/36
 #define INC_DEPTH   0.1
@@ -51,11 +49,9 @@
 #define INC_LIGHTS  0.2
 
 // Don't respond to tiny joystick movements
-// TODO move to yaml
 #define INPUT_DEAD_BAND 0.05
 
 // Don't publish tiny thruster efforts
-// TODO move to yaml
 #define EFFORT_DEAD_BAND 0.01
 
 // Publish messages at 100Hz
@@ -77,7 +73,6 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   lights_trim_button_previous_{false}
 {
   // Set up all subscriptions
-  // TODO move topics to yaml
   baro_sub_ = nh_.subscribe<orca_msgs::Depth>("/depth", 10, &OrcaBase::baroCallback, this);
   imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
@@ -85,8 +80,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   depth_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
 
   // Advertise all topics that we'll publish on
-  // TODO move topics to yaml
-  thruster_pub_ = nh_.advertise<orca_msgs::Thruster>("/thruster", 1);
+  thruster_pub_ = nh_.advertise<orca_msgs::Thruster>("/thrusters", 1);
   camera_tilt_pub_ = nh_.advertise<orca_msgs::Camera>("/camera_tilt", 1);
   lights_pub_ = nh_.advertise<orca_msgs::Lights>("/lights", 1);
   yaw_pid_enable_pub_ = nh_.advertise<std_msgs::Bool>("/yaw_pid_enable", 1);
@@ -267,7 +261,6 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     // Rising edge
     if ((mode_ == Mode::stabilize || mode_ == Mode::depth_hold))
     {
-      // TODO deal w/ wraparound
       yaw_setpoint_ = joy_msg->axes[JOY_AXIS_YAW_TRIM] > 0.0 ? yaw_setpoint_ + INC_YAW : yaw_setpoint_ - INC_YAW;
       publishYawSetpoint();
     }

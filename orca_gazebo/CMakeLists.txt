@@ -27,10 +27,10 @@ include_directories(${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE
 ## Require C++14
 add_compile_options(-std=c++14)
 
-add_library(ThrusterPlugin src/thruster_plugin.cpp) # TODO SHARED?
+add_library(ThrusterPlugin src/thruster_plugin.cpp)
 target_link_libraries(ThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_dependencies(ThrusterPlugin ${catkin_EXPORTED_TARGETS})
 
-add_library(DepthPlugin src/depth_plugin.cpp) # TODO SHARED?
+add_library(DepthPlugin src/depth_plugin.cpp)
 target_link_libraries(DepthPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_dependencies(DepthPlugin ${catkin_EXPORTED_TARGETS})

@@ -29,5 +29,5 @@ include_directories(
 add_compile_options(-std=c++14)
 
 ## Driver
-add_executable(orca_driver src/orca_driver.cpp)
-target_link_libraries(orca_driver /usr/lib/libroboticscape.so ${catkin_LIBRARIES})
+add_executable(orca_driver src/orca_driver.cpp src/maestro.cpp)
+target_link_libraries(orca_driver ${catkin_LIBRARIES})
