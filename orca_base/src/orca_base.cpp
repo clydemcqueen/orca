@@ -73,7 +73,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   lights_trim_button_previous_{false}
 {
   // Set up all subscriptions
-  baro_sub_ = nh_.subscribe<orca_msgs::Depth>("/depth", 10, &OrcaBase::baroCallback, this);
+  baro_sub_ = nh_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
   imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   yaw_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/yaw_control_effort", 10, &OrcaBase::yawControlEffortCallback, this);
@@ -91,8 +91,8 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   depth_setpoint_pub_ = nh_.advertise<std_msgs::Float64>("/depth_setpoint", 1);
 }
 
-// New depth reading
-void OrcaBase::baroCallback(const orca_msgs::Depth::ConstPtr& baro_msg)
+// New barometer reading
+void OrcaBase::baroCallback(const orca_msgs::Barometer::ConstPtr& baro_msg)
 {
   depth_state_ = baro_msg->depth;
 }

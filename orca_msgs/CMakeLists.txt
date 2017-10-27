@@ -13,7 +13,6 @@ add_message_files(DIRECTORY msg FILES
   Barometer.msg
   Battery.msg
   Camera.msg
-  Depth.msg
   Leak.msg
   Lights.msg
   Thrusters.msg

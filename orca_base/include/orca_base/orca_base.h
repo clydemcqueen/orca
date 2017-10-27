@@ -6,7 +6,7 @@
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Joy.h>
 #include <tf/transform_listener.h>
-#include "orca_msgs/Depth.h"
+#include "orca_msgs/Barometer.h"
 
 template<class T>
 constexpr const T dead_band(const T v, const T d)
@@ -71,7 +71,7 @@ private:
   ros::Subscriber joy_sub_;
   
   // Callbacks
-  void baroCallback(const orca_msgs::Depth::ConstPtr &msg);
+  void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
   void imuCallback(const sensor_msgs::ImuConstPtr &msg);
   void yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg);
   void depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg);

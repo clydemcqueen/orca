@@ -203,13 +203,13 @@
   </gazebo>
 
   <!--
-    The DepthPlugin (provided by Orca, wraps a Gazebo altimeter sensor) simulates a depth sensor such as the BlueRobotics Bar30.
+    The BarometerPlugin (provided by Orca, wraps a Gazebo altimeter sensor) simulates a barometer sensor such as the BlueRobotics Bar30.
   -->
   <gazebo reference="base_link">
-    <sensor name="depth_sensor" type="altimeter">
+    <sensor name="barometer_sensor" type="altimeter">
       <update_rate>60</update_rate>
-      <plugin name="DepthPlugin" filename="libDepthPlugin.so">
-        <ros_topic>/depth</ros_topic>
+      <plugin name="BarometerPlugin" filename="libBarometerPlugin.so">
+        <ros_topic>/barometer</ros_topic>
       </plugin>
     </sensor>
   </gazebo>
