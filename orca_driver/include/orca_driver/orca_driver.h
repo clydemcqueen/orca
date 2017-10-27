@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <ros/ros.h>
-#include <tf/transform_listener.h>
 #include "orca_driver/maestro.h"
 #include "orca_msgs/Battery.h"
 #include "orca_msgs/Camera.h"
@@ -30,7 +29,6 @@ class OrcaDriver
 {
 private:
   ros::NodeHandle &nh_;
-  tf::TransformListener &tf_;
   std::vector<int> thruster_channels_;
   maestro::Maestro maestro_;
   orca_msgs::Battery battery_msg_;
@@ -56,7 +54,7 @@ private:
   bool preDive();
 
 public:
-  explicit OrcaDriver(ros::NodeHandle &nh, tf::TransformListener &tf);
+  explicit OrcaDriver(ros::NodeHandle &nh);
   ~OrcaDriver() {}; // Suppress default copy and move constructors
 
   bool run();

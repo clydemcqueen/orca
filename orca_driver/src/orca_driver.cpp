@@ -21,9 +21,8 @@
 
 namespace orca_driver {
 
-OrcaDriver::OrcaDriver(ros::NodeHandle &nh, tf::TransformListener &tf) :
+OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
   nh_{nh},
-  tf_{tf},
   thruster_channels_{THRUSTER_1_CHANNEL, THRUSTER_2_CHANNEL, THRUSTER_3_CHANNEL, THRUSTER_4_CHANNEL, THRUSTER_5_CHANNEL, THRUSTER_6_CHANNEL}
 {
   // Set up subscriptions
@@ -197,10 +196,9 @@ int main(int argc, char **argv)
   // Initialize ROS
   ros::init(argc, argv, "orca_driver");
   ros::NodeHandle nh{"~"};
-  tf::TransformListener tf{nh}; // TODO might not need a transform listener, depends on odom implementation
 
   // Run the driver; in normal use the power will be yanked and run() will never return
-  orca_driver::OrcaDriver orca_driver{nh, tf};
+  orca_driver::OrcaDriver orca_driver{nh};
   if (orca_driver.run())
   {
     // Normal exit (Ctrl-C) during testing, ROS has already been shut down

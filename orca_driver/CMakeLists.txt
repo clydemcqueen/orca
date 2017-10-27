@@ -6,9 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
   orca_msgs
   roscpp
   rospy
-  sensor_msgs
   std_msgs
-  tf
 )
 
 ## Declare downstream dependencies
