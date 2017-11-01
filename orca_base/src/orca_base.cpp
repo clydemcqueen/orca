@@ -2,7 +2,7 @@
 #include "orca_base/orca_base.h"
 #include "orca_msgs/Camera.h"
 #include "orca_msgs/Lights.h"
-#include "orca_msgs/Thruster.h"
+#include "orca_msgs/Thrusters.h"
 
 // TODO move defines to yaml
 
@@ -80,7 +80,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   depth_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
 
   // Advertise all topics that we'll publish on
-  thruster_pub_ = nh_.advertise<orca_msgs::Thruster>("/thrusters", 1);
+  thrusters_pub_ = nh_.advertise<orca_msgs::Thrusters>("/thrusters", 1);
   camera_tilt_pub_ = nh_.advertise<orca_msgs::Camera>("/camera_tilt", 1);
   lights_pub_ = nh_.advertise<orca_msgs::Lights>("/lights", 1);
   yaw_pid_enable_pub_ = nh_.advertise<std_msgs::Bool>("/yaw_pid_enable", 1);
@@ -355,14 +355,14 @@ void OrcaBase::spinOnce(const ros::TimerEvent &event)
   // Set thruster efforts. Note that strafe and yaw areTHRUSTER_MAX for left, THRUSTER_MIN for right.
   // Order must match the order of the <thruster> tags in the URDF.
   // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
-  orca_msgs::Thruster thruster_msg;
-  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_pub_.publish(thruster_msg);
+  orca_msgs::Thrusters thrusters_msg;
+  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_pub_.publish(thrusters_msg);
 
   // TODO publish odometry
 }

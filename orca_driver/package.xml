@@ -16,6 +16,7 @@
   <buildtool_depend>catkin</buildtool_depend>
 
   <depend>orca_msgs</depend>
+  <depend>phidgets_imu</depend>
   <depend>python-smbus</depend>
   <depend>roscpp</depend>
   <depend>rospy</depend>

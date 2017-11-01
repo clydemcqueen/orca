@@ -1,0 +1,15 @@
+<launch>
+
+  <!-- Pololu Maestro -->
+  <node name="orca_driver" pkg="orca_driver" type="orca_driver" output="screen"/>
+
+  <!-- Phidgets IMU -->
+  <include file="$(find phidgets_imu)/launch/imu.launch"/>
+
+  <!-- Bar30 -->
+  <node name="bar30" pkg="orca_driver" type="bar30_node.py" output="screen"/>
+
+  <!-- Orca base -->
+  <include file="$(find orca_base)/launch/base.launch"/>
+
+</launch>
