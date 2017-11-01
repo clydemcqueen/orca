@@ -4,35 +4,6 @@
 #include "orca_msgs/Lights.h"
 #include "orca_msgs/Thruster.h"
 
-// TODO move defines to yaml
-
-// Joy message axes:
-#define JOY_AXIS_YAW            0   // Left stick left/right; 1.0 is left and -1.0 is right
-#define JOY_AXIS_FORWARD        1   // Left stick up/down; 1.0 is forward and -1.0 is backward
-#define JOY_AXIS_STRAFE         3   // Right stick left/right; 1.0 is left and -1.0 is right
-#define JOY_AXIS_VERTICAL       4   // Right stick up/down; 1.0 is ascend and -1.0 is descend
-#define JOY_AXIS_YAW_TRIM       6   // Trim left/right; acts like 2 buttons; 1.0 for left and -1.0 for right
-#define JOY_AXIS_VERTICAL_TRIM  7   // Trim up/down; acts like 2 buttons; 1.0 for up and -1.0 for down
-
-// Unused axes:
-// 2 Left trigger; starts from 1.0 and moves to -1.0
-// 5 Right trigger; starts from 1.0 and moves to -1.0
-
-// Joy message buttons:
-#define JOY_BUTTON_DISARM       6   // View
-#define JOY_BUTTON_ARM          7   // Menu
-#define JOY_BUTTON_MANUAL       0   // A
-#define JOY_BUTTON_STABILIZE    2   // X
-#define JOY_BUTTON_DEPTH_HOLD   3   // Y
-#define JOY_BUTTON_SURFACE      1   // B
-#define JOY_CAMERA_TILT_DOWN    4   // Left bumper
-#define JOY_CAMERA_TILT_UP      5   // Right bumper
-#define JOY_LIGHTS_BRIGHT       9   // Left stick
-#define JOY_LIGHTS_DIM          10  // Right stick
-
-// Unused buttons:
-// 8 Logo
-
 // Limits
 #define THRUSTER_MIN -1.0
 #define THRUSTER_MAX  1.0
@@ -41,21 +12,10 @@
 #define LIGHTS_MIN    0.0
 #define LIGHTS_MAX    1.0
 
-// Trim increments
-#define PI          3.14159
-#define INC_YAW     PI/36
-#define INC_DEPTH   0.1
-#define INC_TILT    5
-#define INC_LIGHTS  0.2
+#define PI 3.14159
 
-// Don't respond to tiny joystick movements
-#define INPUT_DEAD_BAND 0.05
-
-// Don't publish tiny thruster efforts
-#define EFFORT_DEAD_BAND 0.01
-
-// Publish messages at 100Hz
-#define SPIN_RATE 100
+// Message publish rate in Hz
+#define SPIN_RATE 50
 
 namespace orca_base {
 
@@ -72,6 +32,31 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   lights_{0},
   lights_trim_button_previous_{false}
 {
+  nh_.param("joy_axis_yaw", joy_axis_yaw_, 0);                      // Left stick left/right; 1.0 is left and -1.0 is right
+  nh_.param("joy_axis_forward", joy_axis_forward_, 1);              // Left stick up/down; 1.0 is forward and -1.0 is backward
+  nh_.param("joy_axis_strafe", joy_axis_strafe_, 3);                // Right stick left/right; 1.0 is left and -1.0 is right
+  nh_.param("joy_axis_vertical", joy_axis_vertical_, 4);            // Right stick up/down; 1.0 is ascend and -1.0 is descend
+  nh_.param("joy_axis_yaw_trim", joy_axis_yaw_trim_, 6);            // Trim left/right; acts like 2 buttons; 1.0 for left and -1.0 for right
+  nh_.param("joy_axis_vertical_trim", joy_axis_vertical_trim_, 7);  // Trim up/down; acts like 2 buttons; 1.0 for up and -1.0 for down
+
+  nh_.param("joy_button_disarm", joy_button_disarm_, 6);            // View
+  nh_.param("joy_button_arm", joy_button_arm_, 7);                  // Menu
+  nh_.param("joy_button_manual", joy_button_manual_, 0);            // A
+  nh_.param("joy_button_stabilize", joy_button_stabilize_, 2);      // X
+  nh_.param("joy_button_depth_hold", joy_button_depth_hold_, 3);    // Y
+  nh_.param("joy_button_surface", joy_button_surface_, 1);          // B
+  nh_.param("joy_button_tilt_down", joy_button_tilt_down_, 4);      // Left bumper
+  nh_.param("joy_button_tilt_up", joy_button_tilt_up_, 5);          // Right bumper
+  nh_.param("joy_button_bright", joy_button_bright_, 9);            // Left stick
+  nh_.param("joy_button_dim", joy_button_dim_, 10);                 // Right stick
+
+  nh_.param("inc_yaw", inc_yaw_, PI/36);
+  nh_.param("inc_depth", inc_depth_, 0.1);
+  nh_.param("inc_tilt", inc_tilt_, 5);
+  nh_.param("inc_lights", inc_lights_, 0.2);
+  nh_.param("input_dead_band", input_dead_band_, 0.05);             // Don't respond to tiny joystick movements
+  nh_.param("effort_dead_band", effort_dead_band_, 0.01);           // Don't publish tiny thruster efforts
+  
   // Set up all subscriptions
   baro_sub_ = nh_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
   imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu", 10, &OrcaBase::imuCallback, this);
@@ -114,7 +99,7 @@ void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
   if (mode_ == Mode::stabilize || mode_ == Mode::depth_hold)
   {
-    yaw_effort_ = dead_band(msg->data, EFFORT_DEAD_BAND);
+    yaw_effort_ = dead_band(msg->data, effort_dead_band_);
   }
 }
 
@@ -123,7 +108,7 @@ void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg
 {
   if (mode_ == Mode::depth_hold)
   {
-    vertical_effort_ = dead_band(msg->data, EFFORT_DEAD_BAND);  
+    vertical_effort_ = dead_band(msg->data, effort_dead_band_);  
   }
 }
 
@@ -215,12 +200,12 @@ void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
 void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 {
   // Arm/disarm
-  if (joy_msg->buttons[JOY_BUTTON_DISARM])
+  if (joy_msg->buttons[joy_button_disarm_])
   {
     ROS_INFO("Disarmed");
     setMode(Mode::disarmed);
   }
-  else if (joy_msg->buttons[JOY_BUTTON_ARM])
+  else if (joy_msg->buttons[joy_button_arm_])
   {
     ROS_INFO("Armed, manual");
     setMode(Mode::manual);
@@ -234,102 +219,102 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 
   // Mode
-  if (joy_msg->buttons[JOY_BUTTON_MANUAL])
+  if (joy_msg->buttons[joy_button_manual_])
   {
     ROS_INFO("Manual");
     setMode(Mode::manual);
   }
-  else if (joy_msg->buttons[JOY_BUTTON_STABILIZE])
+  else if (joy_msg->buttons[joy_button_stabilize_])
   {
     ROS_INFO("Stabilize");
     setMode(Mode::stabilize);
   }
-  else if (joy_msg->buttons[JOY_BUTTON_DEPTH_HOLD])
+  else if (joy_msg->buttons[joy_button_depth_hold_])
   {
     ROS_INFO("Depth hold");
     setMode(Mode::depth_hold, depth_state_);
   }
-  else if (joy_msg->buttons[JOY_BUTTON_SURFACE])
+  else if (joy_msg->buttons[joy_button_surface_])
   {
     ROS_INFO("Surface");
     setMode(Mode::depth_hold, 10.0); // TODO create notion of 'underwater' in gazebo, and set target depth to 0
   }
 
   // Yaw trim
-  if (joy_msg->axes[JOY_AXIS_YAW_TRIM] != 0.0 && !yaw_trim_button_previous_)
+  if (joy_msg->axes[joy_axis_yaw_trim_] != 0.0 && !yaw_trim_button_previous_)
   {
     // Rising edge
     if ((mode_ == Mode::stabilize || mode_ == Mode::depth_hold))
     {
-      yaw_setpoint_ = joy_msg->axes[JOY_AXIS_YAW_TRIM] > 0.0 ? yaw_setpoint_ + INC_YAW : yaw_setpoint_ - INC_YAW;
+      yaw_setpoint_ = joy_msg->axes[joy_axis_yaw_trim_] > 0.0 ? yaw_setpoint_ + inc_yaw_ : yaw_setpoint_ - inc_yaw_;
       publishYawSetpoint();
     }
 
     yaw_trim_button_previous_ = true;
   }
-  else if (joy_msg->axes[JOY_AXIS_YAW_TRIM] == 0.0 && yaw_trim_button_previous_)
+  else if (joy_msg->axes[joy_axis_yaw_trim_] == 0.0 && yaw_trim_button_previous_)
   {
     // Falling edge
     yaw_trim_button_previous_ = false;
   }
 
   // Depth trim
-  if (joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] != 0.0 && !depth_trim_button_previous_)
+  if (joy_msg->axes[joy_axis_vertical_trim_] != 0.0 && !depth_trim_button_previous_)
   {
     // Rising edge
     if (mode_ == Mode::depth_hold)
     {
       // TODO clamp this to the surface
-      depth_setpoint_ = joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] > 0 ? depth_setpoint_ + INC_DEPTH : depth_setpoint_ - INC_DEPTH;
+      depth_setpoint_ = joy_msg->axes[joy_axis_vertical_trim_] > 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_;
       publishDepthSetpoint();
     }
 
     depth_trim_button_previous_ = true;
   }
-  else if (joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] == 0.0 && depth_trim_button_previous_)
+  else if (joy_msg->axes[joy_axis_vertical_trim_] == 0.0 && depth_trim_button_previous_)
   {
     // Falling edge
     depth_trim_button_previous_ = false;
   }
 
   // Camera tilt
-  if ((joy_msg->buttons[JOY_CAMERA_TILT_UP] || joy_msg->buttons[JOY_CAMERA_TILT_DOWN]) && !tilt_trim_button_previous_)
+  if ((joy_msg->buttons[joy_button_tilt_up_] || joy_msg->buttons[joy_button_tilt_down_]) && !tilt_trim_button_previous_)
   {
     // Rising edge
-    tilt_ = clamp(joy_msg->buttons[JOY_CAMERA_TILT_UP] ? tilt_ + INC_TILT : tilt_ - INC_TILT, TILT_MIN, TILT_MAX);
+    tilt_ = clamp(joy_msg->buttons[joy_button_tilt_up_] ? tilt_ + inc_tilt_ : tilt_ - inc_tilt_, TILT_MIN, TILT_MAX);
     publishCameraTilt();
     tilt_trim_button_previous_ = true;
   }
-  else if (!joy_msg->buttons[JOY_CAMERA_TILT_UP] && !joy_msg->buttons[JOY_CAMERA_TILT_DOWN] && tilt_trim_button_previous_)
+  else if (!joy_msg->buttons[joy_button_tilt_up_] && !joy_msg->buttons[joy_button_tilt_down_] && tilt_trim_button_previous_)
   {
     // Falling edge
     tilt_trim_button_previous_ = false;
   }
 
   // Lights
-  if ((joy_msg->buttons[JOY_LIGHTS_BRIGHT] || joy_msg->buttons[JOY_LIGHTS_DIM]) && !lights_trim_button_previous_)
+  if ((joy_msg->buttons[joy_button_bright_] || joy_msg->buttons[joy_button_dim_]) && !lights_trim_button_previous_)
   {
   // Rising edge
-    lights_ = clamp(joy_msg->buttons[JOY_LIGHTS_BRIGHT] ? lights_ + INC_LIGHTS : lights_ - INC_LIGHTS, LIGHTS_MIN, LIGHTS_MAX);
+    lights_ = clamp(joy_msg->buttons[joy_button_bright_] ? lights_ + inc_lights_ : lights_ - inc_lights_, LIGHTS_MIN, LIGHTS_MAX);
     publishLights();
     lights_trim_button_previous_ = true;
   }
-  else if (!joy_msg->buttons[JOY_LIGHTS_BRIGHT] && !joy_msg->buttons[JOY_LIGHTS_DIM] && lights_trim_button_previous_)
+  else if (!joy_msg->buttons[joy_button_bright_] && !joy_msg->buttons[joy_button_dim_] && lights_trim_button_previous_)
   {
     // Falling edge
     lights_trim_button_previous_ = false;      
   }
 
   // Thrusters
-  forward_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_FORWARD], INPUT_DEAD_BAND);
+  forward_effort_ = dead_band((double)joy_msg->axes[joy_axis_forward_], input_dead_band_);
   if (mode_ == Mode::manual)
   {
-    yaw_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_YAW], INPUT_DEAD_BAND);
+    yaw_effort_ = dead_band((double)joy_msg->axes[joy_axis_yaw_], input_dead_band_);
   }
-  strafe_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_STRAFE], INPUT_DEAD_BAND);
+  strafe_effort_ = dead_band((double)joy_msg->axes[joy_axis_strafe_], input_dead_band_);
   if (mode_ == Mode::manual || mode_ == Mode::stabilize)
   {
-    vertical_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_VERTICAL], INPUT_DEAD_BAND);
+    vertical_effort_ = dead_band((double)joy_msg->axes[joy_axis_vertical_], input_dead_band_);
   }
 }
 
