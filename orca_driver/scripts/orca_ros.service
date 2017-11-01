@@ -1,0 +1,9 @@
+[Unit]
+Description=Orca ROS nodes
+
+[Service]
+User=root
+ExecStart=/home/pi/orca_catkin_ws/src/orca/orca_driver/scripts/start_orca_ros.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -28,7 +28,7 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
   // Set up subscriptions
   camera_tilt_sub_ = nh_.subscribe<orca_msgs::Camera>("/camera_tilt", 10, &OrcaDriver::cameraTiltCallback, this);
   lights_sub_ = nh_.subscribe<orca_msgs::Lights>("/lights", 10, &OrcaDriver::lightsCallback, this);
-  thruster_sub_ = nh_.subscribe<orca_msgs::Thrusters>("/thrusters", 10, &OrcaDriver::thrustersCallback, this);
+  thrusters_sub_ = nh_.subscribe<orca_msgs::Thrusters>("/thrusters", 10, &OrcaDriver::thrustersCallback, this);
   
   // Advertise topics that we'll publish on
   battery_pub_ = nh_.advertise<orca_msgs::Battery>("/battery", 1);
@@ -141,12 +141,15 @@ bool OrcaDriver::preDive()
   {
     unsigned short value;
     maestro_.get_pwm(thruster_channels_[i], value);
+    ROS_INFO("Thruster %d is reporting %d", i, value);
+#if 0
     if (value != 1500)
     {
       ROS_ERROR("Thruster %d didn't initialize (possibly others)", i + 1);
       maestro_.disconnect();
       return false;
     }
+#endif
   }
 
   ROS_INFO("Pre-dive checks passed");

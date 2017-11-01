@@ -37,7 +37,7 @@ private:
   // Subscriptions
   ros::Subscriber camera_tilt_sub_;
   ros::Subscriber lights_sub_;
-  ros::Subscriber thruster_sub_;
+  ros::Subscriber thrusters_sub_;
   
   // Callbacks
   void cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg);
