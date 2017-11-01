@@ -37,7 +37,32 @@ private:
   ros::NodeHandle &nh_;
   tf::TransformListener &tf_;
 
-  Mode mode_;
+  int joy_axis_yaw_;
+  int joy_axis_forward_;
+  int joy_axis_strafe_;
+  int joy_axis_vertical_;
+  int joy_axis_yaw_trim_;
+  int joy_axis_vertical_trim_;
+
+  int joy_button_disarm_;
+  int joy_button_arm_;
+  int joy_button_manual_;
+  int joy_button_stabilize_;
+  int joy_button_depth_hold_;
+  int joy_button_surface_;
+  int joy_button_tilt_down_;
+  int joy_button_tilt_up_;
+  int joy_button_bright_;
+  int joy_button_dim_;
+
+  double inc_yaw_;
+  double inc_depth_;
+  int inc_tilt_;
+  double inc_lights_;
+  double input_dead_band_;
+  double effort_dead_band_;
+
+  Mode mode_;  
 
   // Yaw pid control state
   double yaw_state_;
