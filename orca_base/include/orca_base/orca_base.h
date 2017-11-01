@@ -103,7 +103,7 @@ private:
   void joyCallback(const sensor_msgs::Joy::ConstPtr& msg);
   
   // Publications
-  ros::Publisher thruster_pub_;
+  ros::Publisher thrusters_pub_;
   ros::Publisher yaw_pid_enable_pub_;
   ros::Publisher yaw_state_pub_;
   ros::Publisher yaw_setpoint_pub_;

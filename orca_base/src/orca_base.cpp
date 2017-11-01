@@ -4,6 +4,35 @@
 #include "orca_msgs/Lights.h"
 #include "orca_msgs/Thrusters.h"
 
+// TODO move defines to yaml
+
+// Joy message axes:
+#define JOY_AXIS_YAW            0   // Left stick left/right; 1.0 is left and -1.0 is right
+#define JOY_AXIS_FORWARD        1   // Left stick up/down; 1.0 is forward and -1.0 is backward
+#define JOY_AXIS_STRAFE         3   // Right stick left/right; 1.0 is left and -1.0 is right
+#define JOY_AXIS_VERTICAL       4   // Right stick up/down; 1.0 is ascend and -1.0 is descend
+#define JOY_AXIS_YAW_TRIM       6   // Trim left/right; acts like 2 buttons; 1.0 for left and -1.0 for right
+#define JOY_AXIS_VERTICAL_TRIM  7   // Trim up/down; acts like 2 buttons; 1.0 for up and -1.0 for down
+
+// Unused axes:
+// 2 Left trigger; starts from 1.0 and moves to -1.0
+// 5 Right trigger; starts from 1.0 and moves to -1.0
+
+// Joy message buttons:
+#define JOY_BUTTON_DISARM       6   // View
+#define JOY_BUTTON_ARM          7   // Menu
+#define JOY_BUTTON_MANUAL       0   // A
+#define JOY_BUTTON_STABILIZE    2   // X
+#define JOY_BUTTON_DEPTH_HOLD   3   // Y
+#define JOY_BUTTON_SURFACE      1   // B
+#define JOY_CAMERA_TILT_DOWN    4   // Left bumper
+#define JOY_CAMERA_TILT_UP      5   // Right bumper
+#define JOY_LIGHTS_BRIGHT       9   // Left stick
+#define JOY_LIGHTS_DIM          10  // Right stick
+
+// Unused buttons:
+// 8 Logo
+
 // Limits
 #define THRUSTER_MIN -1.0
 #define THRUSTER_MAX  1.0
@@ -65,7 +94,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   depth_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
 
   // Advertise all topics that we'll publish on
-  thruster_pub_ = nh_.advertise<orca_msgs::Thrusters>("/thrusters", 1);
+  thrusters_pub_ = nh_.advertise<orca_msgs::Thrusters>("/thrusters", 1);
   camera_tilt_pub_ = nh_.advertise<orca_msgs::Camera>("/camera_tilt", 1);
   lights_pub_ = nh_.advertise<orca_msgs::Lights>("/lights", 1);
   yaw_pid_enable_pub_ = nh_.advertise<std_msgs::Bool>("/yaw_pid_enable", 1);
@@ -340,14 +369,14 @@ void OrcaBase::spinOnce(const ros::TimerEvent &event)
   // Set thruster efforts. Note that strafe and yaw areTHRUSTER_MAX for left, THRUSTER_MIN for right.
   // Order must match the order of the <thruster> tags in the URDF.
   // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
-  orca_msgs::Thrusters thruster_msg;
-  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_pub_.publish(thruster_msg);
+  orca_msgs::Thrusters thrusters_msg;
+  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_pub_.publish(thrusters_msg);
 
   // TODO publish odometry
 }
