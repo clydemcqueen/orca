@@ -1,30 +1,40 @@
 #include "orca_driver/orca_driver.h"
 
-// TODO move defines to yaml
-
-#define SPIN_RATE 50
-
-// Maestro channel assignments
-#define THRUSTER_1_CHANNEL  0
-#define THRUSTER_2_CHANNEL  1
-#define THRUSTER_3_CHANNEL  2
-// Leave a gap
-#define THRUSTER_4_CHANNEL  4
-#define THRUSTER_5_CHANNEL  5
-#define THRUSTER_6_CHANNEL  6
-// Leave a gap
-#define LIGHTS_CHANNEL      8
-#define TILT_CHANNEL        9
-// Leave a gap
-#define VOLTAGE_CHANNEL    11
-#define LEAK_CHANNEL       12
-
 namespace orca_driver {
 
 OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
-  nh_{nh},
-  thruster_channels_{THRUSTER_1_CHANNEL, THRUSTER_2_CHANNEL, THRUSTER_3_CHANNEL, THRUSTER_4_CHANNEL, THRUSTER_5_CHANNEL, THRUSTER_6_CHANNEL}
+  nh_{nh}
 {
+  nh_.param<std::string>("maestro_port", maestro_port_, "/dev/ttyACM0");
+  ROS_INFO("Expecting Maestro on port %s", maestro_port_.c_str());
+
+  nh_.param("num_thrusters", num_thrusters_, 6);
+  ROS_INFO("Configured for %d thrusters:", num_thrusters_);
+  for (int i = 0; i < num_thrusters_; ++i)
+  {
+    int channel;
+    nh_.param("thruster_" + std::to_string(i) + "_channel", channel, i);
+    thruster_channels_.push_back(channel);
+    ROS_INFO("Thruster %d on channel %d", i, channel);   
+  }
+
+  nh_.param("lights_channel", lights_channel_, 8);
+  ROS_INFO("Lights on channel %d", lights_channel_);
+  
+  nh_.param("tilt_channel", tilt_channel_, 9);
+  ROS_INFO("Camera servo on channel %d", tilt_channel_);
+  
+  nh_.param("voltage_channel", voltage_channel_, 11); // Must be analog input
+  nh_.param("voltage_multiplier", voltage_multiplier_, 47.0/10.0);
+  nh_.param("voltage_min", voltage_min_, 12.0);
+  ROS_INFO("Voltage sensor on channel %d, multiplier is %g, minimum is %g", voltage_channel_, voltage_multiplier_, voltage_min_);
+
+  nh_.param("leak_channel", leak_channel_, 12); // Must be digital input
+  ROS_INFO("Leak sensor on channel %d", leak_channel_);
+
+  nh_.param("spin_rate", spin_rate_, 50);
+  ROS_INFO("Publishing messages at %d Hz", spin_rate_);
+  
   // Set up subscriptions
   camera_tilt_sub_ = nh_.subscribe<orca_msgs::Camera>("/camera_tilt", 10, &OrcaDriver::cameraTiltCallback, this);
   lights_sub_ = nh_.subscribe<orca_msgs::Lights>("/lights", 10, &OrcaDriver::lightsCallback, this);
@@ -39,7 +49,7 @@ void OrcaDriver::cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    maestro_.set_pwm(TILT_CHANNEL, servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900));
+    maestro_.set_pwm(tilt_channel_, servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900));
   }
   else
   {
@@ -51,7 +61,7 @@ void OrcaDriver::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    maestro_.set_pwm(LIGHTS_CHANNEL, servo_pulse_width(-msg->brightness, 0, 100, 1100, 1900));
+    maestro_.set_pwm(lights_channel_, servo_pulse_width(-msg->brightness, 0, 100, 1100, 1900));
   }
   else
   {
@@ -77,9 +87,9 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
 bool OrcaDriver::readBattery()
 {
   float temp;
-  if (maestro_.ready() && maestro_.get_analog(VOLTAGE_CHANNEL, temp))
+  if (maestro_.ready() && maestro_.get_analog(voltage_channel_, temp))
   {
-    battery_msg_.voltage = temp * 4; // Compensate for the 1/4 voltage divider
+    battery_msg_.voltage = temp * voltage_multiplier_;
     return true;
   }
   else
@@ -92,7 +102,7 @@ bool OrcaDriver::readBattery()
 bool OrcaDriver::readLeak()
 {
   bool temp;
-  if (maestro_.ready() && maestro_.get_digital(LEAK_CHANNEL, temp))
+  if (maestro_.ready() && maestro_.get_digital(leak_channel_, temp))
   {
     leak_msg_.leak_detected = temp ? 1 : 0; // TODO why isn't this a bool in the message?
     return true;
@@ -121,7 +131,7 @@ bool OrcaDriver::preDive()
     return false;
   }
 
-  ROS_INFO("Voltage %g, leak %d", battery_msg_.voltage, leak_msg_.leak_detected);
+  ROS_INFO("Voltage is %g, leak status is %d", battery_msg_.voltage, leak_msg_.leak_detected);
 
   if (leak_msg_.leak_detected)
   {
@@ -130,9 +140,9 @@ bool OrcaDriver::preDive()
     return false;
   }
 
-  if (battery_msg_.voltage < 12.0) // TODO threshold move to yaml
+  if (battery_msg_.voltage < voltage_min_)
   {
-    ROS_ERROR("Battery voltage %g too low", battery_msg_.voltage);
+    ROS_ERROR("Battery voltage %g is below minimum %g", battery_msg_.voltage, voltage_min_);
     maestro_.disconnect();
     return false;
   }
@@ -141,7 +151,8 @@ bool OrcaDriver::preDive()
   {
     unsigned short value;
     maestro_.get_pwm(thruster_channels_[i], value);
-    ROS_INFO("Thruster %d is reporting %d", i, value);
+    ROS_INFO("Thruster %d is set at %d", i, value);
+    // TODO enable thruster checks
 #if 0
     if (value != 1500)
     {
@@ -159,7 +170,7 @@ bool OrcaDriver::preDive()
 // Main entry point
 bool OrcaDriver::run()
 {
-  std::string port = "/dev/ttyACM0"; // TODO move to yaml
+  std::string port = maestro_port_;
   ROS_INFO("Opening port %s...", port.c_str());
   maestro_.connect(port);
   if (!maestro_.ready())
@@ -175,7 +186,7 @@ bool OrcaDriver::run()
   }
 
   ROS_INFO("Entering main loop");  
-  ros::Rate r(SPIN_RATE);
+  ros::Rate r(spin_rate_);
   while (ros::ok())
   {
     // Do our work

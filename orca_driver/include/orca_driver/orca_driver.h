@@ -1,6 +1,7 @@
 #ifndef ORCA_DRIVER_H
 #define ORCA_DRIVER_H
 
+#include <string>
 #include <vector>
 #include <ros/ros.h>
 #include "orca_driver/maestro.h"
@@ -29,7 +30,18 @@ class OrcaDriver
 {
 private:
   ros::NodeHandle &nh_;
+
+  int num_thrusters_;
   std::vector<int> thruster_channels_;
+  int lights_channel_;
+  int tilt_channel_;
+  int voltage_channel_;
+  int leak_channel_;
+  int spin_rate_;
+  std::string maestro_port_;
+  double voltage_multiplier_;
+  double voltage_min_;
+
   maestro::Maestro maestro_;
   orca_msgs::Battery battery_msg_;
   orca_msgs::Leak leak_msg_;
