@@ -53,7 +53,7 @@ bool Maestro::ready()
 }
 
 // Set the servo / ESC PWM signal, value is in microseconds, return true if successful
-bool Maestro::set_pwm(unsigned char channel, unsigned short value)
+bool Maestro::setPWM(unsigned char channel, unsigned short value)
 {
   if (ready())
   {
@@ -67,8 +67,8 @@ bool Maestro::set_pwm(unsigned char channel, unsigned short value)
   }
 }
 
-// Get the servo / ESC PWM signal, value is in microseconds, return true if successful
-bool Maestro::get_pwm(unsigned char channel, unsigned short& value)
+// Get the value at a particular channel
+bool Maestro::getValue(unsigned char channel, unsigned short& value)
 {
   if (ready())
   {
@@ -91,11 +91,24 @@ bool Maestro::get_pwm(unsigned char channel, unsigned short& value)
   }
 }
 
+// Get the servo / ESC PWM signal, value is in microseconds, return true if successful
+bool Maestro::getPWM(unsigned char channel, unsigned short& value)
+{
+  if (!getValue(channel, value))
+  {
+    return false;
+  }
+
+  // Maestro pwm measurements are in 0.25us
+  value /= 4;
+  return true;
+}
+
 // Get the value of an analog pin, 0-5.0V
-bool Maestro::get_analog(unsigned char channel, float& value)
+bool Maestro::getAnalog(unsigned char channel, float& value)
 {
   unsigned short temp;
-  if (!get_pwm(channel, temp))
+  if (!getValue(channel, temp))
   {
     return false;
   }
@@ -106,10 +119,10 @@ bool Maestro::get_analog(unsigned char channel, float& value)
 }
 
 // Get the value of a digital pin, true = high
-bool Maestro::get_digital(unsigned char channel, bool& value)
+bool Maestro::getDigital(unsigned char channel, bool& value)
 {
   unsigned short temp;
-  if (!get_pwm(channel, temp))
+  if (!getValue(channel, temp))
   {
     return false;
   }
