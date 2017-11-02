@@ -143,7 +143,6 @@ void OrcaBase::publishLights()
 // Change operation mode
 void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
 {
-  // TODO mutex critical state
   mode_ = mode;  
 
   if (mode == Mode::depth_hold)
