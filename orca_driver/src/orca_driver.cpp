@@ -13,9 +13,9 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
   for (int i = 0; i < num_thrusters_; ++i)
   {
     int channel;
-    nh_.param("thruster_" + std::to_string(i) + "_channel", channel, i);
+    nh_.param("thruster_" + std::to_string(i + 1) + "_channel", channel, i);
     thruster_channels_.push_back(channel);
-    ROS_INFO("Thruster %d on channel %d", i, channel);   
+    ROS_INFO("Thruster %d on channel %d", i + 1, channel);   
   }
 
   nh_.param("lights_channel", lights_channel_, 8);
@@ -49,7 +49,7 @@ void OrcaDriver::cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    maestro_.set_pwm(tilt_channel_, servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900));
+    maestro_.setPWM(tilt_channel_, servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900));
   }
   else
   {
@@ -61,7 +61,7 @@ void OrcaDriver::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    maestro_.set_pwm(lights_channel_, servo_pulse_width(-msg->brightness, 0, 100, 1100, 1900));
+    maestro_.setPWM(lights_channel_, servo_pulse_width(-msg->brightness, 0, 100, 1100, 1900));
   }
   else
   {
@@ -75,7 +75,7 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
   {
     for (int i = 0; i < thruster_channels_.size(); ++i)
     {
-      maestro_.set_pwm(thruster_channels_[i], servo_pulse_width(msg->effort[i], -1.0, 1.0, 1100, 1900));
+      maestro_.setPWM(thruster_channels_[i], servo_pulse_width(msg->effort[i], -1.0, 1.0, 1100, 1900));
     }
   }
   else
@@ -87,7 +87,7 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
 bool OrcaDriver::readBattery()
 {
   float temp;
-  if (maestro_.ready() && maestro_.get_analog(voltage_channel_, temp))
+  if (maestro_.ready() && maestro_.getAnalog(voltage_channel_, temp))
   {
     battery_msg_.voltage = temp * voltage_multiplier_;
     return true;
@@ -102,7 +102,7 @@ bool OrcaDriver::readBattery()
 bool OrcaDriver::readLeak()
 {
   bool temp;
-  if (maestro_.ready() && maestro_.get_digital(leak_channel_, temp))
+  if (maestro_.ready() && maestro_.getDigital(leak_channel_, temp))
   {
     leak_msg_.leak_detected = temp ? 1 : 0; // TODO why isn't this a bool in the message?
     return true;
@@ -150,17 +150,14 @@ bool OrcaDriver::preDive()
   for (int i = 0; i < thruster_channels_.size(); ++i)
   {
     unsigned short value;
-    maestro_.get_pwm(thruster_channels_[i], value);
-    ROS_INFO("Thruster %d is set at %d", i, value);
-    // TODO enable thruster checks
-#if 0
+    maestro_.getPWM(thruster_channels_[i], value);
+    ROS_INFO("Thruster %d is set at %d", i + 1, value);
     if (value != 1500)
     {
-      ROS_ERROR("Thruster %d didn't initialize (possibly others)", i + 1);
+      ROS_ERROR("Thruster %d didn't initialize properly (and possibly others)", i + 1);
       maestro_.disconnect();
       return false;
     }
-#endif
   }
 
   ROS_INFO("Pre-dive checks passed");

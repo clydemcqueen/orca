@@ -13,9 +13,6 @@
   <!-- Launch orca_base -->
   <node name="orca_base" pkg="orca_base" type="orca_base" output="screen"/>
 
-  <!-- Launch the joystick driver -->
-  <node name="joystick" pkg="joy" type="joy_node" output="screen"/>
-
   <!-- Launch the yaw pid controller -->
   <node name="yaw_pid" pkg="pid" type="controller">
     <param name="node_name" value="yaw_pid_node"/>
