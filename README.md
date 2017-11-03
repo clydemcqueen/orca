@@ -61,9 +61,10 @@ Plug in your gamepad, hit the [menu button](https://support.xbox.com/en-US/xbox-
 
 ## Code Structure
 
-There are 5 projects:
+There are 6 projects:
 * `orca_msgs` provides message types
 * `orca_description` provides robot description files (urdf, etc.)
 * `orca_driver` provides the interface between the hardware and ROS (not required for simulations)
 * `orca_base` provides the ROV and AUV functionality
+* `orca_topside` provides the topside environment, including rviz configuration
 * `orca_gazebo` provides the simulation environment

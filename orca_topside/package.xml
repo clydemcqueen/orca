@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package format="2">
 
-  <name>orca</name>
+  <name>orca_topside</name>
   <version>0.0.0</version>
-  <description>ROS driver for the BlueRobotics BlueROV2</description>
+  <description>Orca topside files</description>
 
   <maintainer email="clyde@mcqueen.net">Clyde McQueen</maintainer>
   <license>BSD</license>
@@ -14,15 +14,7 @@
   <author>Clyde McQueen</author>
 
   <buildtool_depend>catkin</buildtool_depend>
+  
+  <depend>rospy</depend>
 
-  <exec_depend>orca_base</exec_depend>
-  <exec_depend>orca_description</exec_depend>
-  <exec_depend>orca_driver</exec_depend>
-  <exec_depend>orca_gazebo</exec_depend>
-  <exec_depend>orca_msgs</exec_depend>
-  <exec_depend>orca_topside</exec_depend>
-
-  <export>
-    <metapackage/>
-  </export>
 </package>
