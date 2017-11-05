@@ -17,6 +17,18 @@
 // Message publish rate in Hz
 #define SPIN_RATE 50
 
+template<class T>
+constexpr const T dead_band(const T v, const T d)
+{
+  return v < d && v > -d ? 0 : v;
+}
+
+template<class T>
+constexpr const T clamp(const T v, const T min, const T max)
+{
+  return v > max ? max : (v < min ? min : v);
+}
+
 namespace orca_base {
 
 OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
