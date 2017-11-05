@@ -15,6 +15,7 @@ add_message_files(DIRECTORY msg FILES
   Camera.msg
   Leak.msg
   Lights.msg
+  Proc.msg
   Thrusters.msg
 )
 generate_messages()
