@@ -46,7 +46,7 @@ private:
   double inc_yaw_;
   double inc_depth_;
   int inc_tilt_;
-  double inc_lights_;
+  int inc_lights_;
   double input_dead_band_;
   double effort_dead_band_;
 
@@ -73,7 +73,7 @@ private:
   bool tilt_trim_button_previous_;
 
   // Lights
-  double lights_;
+  int lights_;
   bool lights_trim_button_previous_;
   
   // Subscriptions
