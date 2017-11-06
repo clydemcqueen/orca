@@ -11,17 +11,6 @@
 #include "orca_msgs/Lights.h"
 #include "orca_msgs/Thrusters.h"
 
-template<class T>
-constexpr const T clamp(const T v, const T min, const T max)
-{
-  return v > max ? max : (v < min ? min : v);
-}
-  
-constexpr const int servo_pulse_width(const float v, const float v_min, const float v_max, const unsigned int pwm_min, const unsigned int pwm_max)
-{
-  return clamp(1100 + static_cast<unsigned int>(800.0 / (v_max - v_min) * (v - v_min)), pwm_min, pwm_max);
-}
-
 namespace orca_driver {
 
 // OrcaDriver provides the interface between the Orca hardware and ROS.
@@ -33,6 +22,7 @@ private:
 
   int num_thrusters_;
   std::vector<int> thruster_channels_;
+  double thruster_limit_;
   int lights_channel_;
   int tilt_channel_;
   int voltage_channel_;

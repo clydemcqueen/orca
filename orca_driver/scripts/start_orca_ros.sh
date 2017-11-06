@@ -8,4 +8,4 @@
 # To start on boot:     sudo systemctl enable orca_ros.service
 # To not start on boot: sudo systemctl disable orca_ros.service
 
-bash -c "source /home/pi/orca_catkin_ws/devel/setup.bash && roslaunch orca_driver sub.launch"
+bash -c "source /home/pi/orca_catkin_ws/devel/setup.bash && stdbuf -o L roslaunch orca_driver sub.launch"

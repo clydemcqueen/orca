@@ -36,7 +36,7 @@ def run():
     rate.sleep()
 
 if __name__ == '__main__':
-    try:
-        run()
-    except rospy.ROSInterruptException:
-        pass
+  try:
+    run()
+  except rospy.ROSInterruptException:
+    pass
