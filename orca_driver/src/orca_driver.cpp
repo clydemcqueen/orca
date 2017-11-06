@@ -1,5 +1,16 @@
 #include "orca_driver/orca_driver.h"
 
+template<class T>
+constexpr const T clamp(const T v, const T min, const T max)
+{
+  return v > max ? max : (v < min ? min : v);
+}
+  
+constexpr const int servo_pulse_width(const float v, const float v_min, const float v_max, const unsigned int pwm_min, const unsigned int pwm_max)
+{
+  return clamp(pwm_min + static_cast<unsigned int>(static_cast<float>(pwm_max - pwm_min) / (v_max - v_min) * (v - v_min)), pwm_min, pwm_max);
+}
+
 namespace orca_driver {
 
 OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
@@ -13,10 +24,13 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
   for (int i = 0; i < num_thrusters_; ++i)
   {
     int channel;
-    nh_.param("thruster_" + std::to_string(i + 1) + "_channel", channel, i);
+    nh_.param("thruster_" + std::to_string(i + 1) + "_channel", channel, i); // TODO doesn't work w/ gaps
     thruster_channels_.push_back(channel);
     ROS_INFO("Thruster %d on channel %d", i + 1, channel);   
   }
+
+  nh_.param("thruster_limit", thruster_limit_, 1.0); // TODO clamp thruster_limit_ to 0, 1.0
+  ROS_INFO("Thruster effort limited to %g", thruster_limit_);
 
   nh_.param("lights_channel", lights_channel_, 8);
   ROS_INFO("Lights on channel %d", lights_channel_);
@@ -34,7 +48,7 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
 
   nh_.param("spin_rate", spin_rate_, 50);
   ROS_INFO("Publishing messages at %d Hz", spin_rate_);
-  
+
   // Set up subscriptions
   camera_tilt_sub_ = nh_.subscribe<orca_msgs::Camera>("/camera_tilt", 10, &OrcaDriver::cameraTiltCallback, this);
   lights_sub_ = nh_.subscribe<orca_msgs::Lights>("/lights", 10, &OrcaDriver::lightsCallback, this);
@@ -49,7 +63,9 @@ void OrcaDriver::cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    maestro_.setPWM(tilt_channel_, servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900));
+    int pwm = servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900);
+    ROS_DEBUG("Set tilt pulse width to %d", pwm);
+    maestro_.setPWM(tilt_channel_, pwm);
   }
   else
   {
@@ -61,7 +77,9 @@ void OrcaDriver::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    maestro_.setPWM(lights_channel_, servo_pulse_width(-msg->brightness, 0, 100, 1100, 1900));
+    int pwm = servo_pulse_width(msg->brightness, 0, 100, 1100, 1900);
+    ROS_DEBUG("Set lights pulse width to %d", pwm);
+    maestro_.setPWM(lights_channel_, pwm);
   }
   else
   {
@@ -75,7 +93,9 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
   {
     for (int i = 0; i < thruster_channels_.size(); ++i)
     {
-      maestro_.setPWM(thruster_channels_[i], servo_pulse_width(msg->effort[i], -1.0, 1.0, 1100, 1900));
+      double effort = msg->effort[i];
+      effort = clamp(effort, -thruster_limit_, thruster_limit_);
+      maestro_.setPWM(thruster_channels_[i], servo_pulse_width(effort, -1.0, 1.0, 1100, 1900));
     }
   }
   else
@@ -152,7 +172,7 @@ bool OrcaDriver::preDive()
     unsigned short value;
     maestro_.getPWM(thruster_channels_[i], value);
     ROS_INFO("Thruster %d is set at %d", i + 1, value);
-    if (value != 1500)
+    if (value != 1500) // TODO constant
     {
       ROS_ERROR("Thruster %d didn't initialize properly (and possibly others)", i + 1);
       maestro_.disconnect();
