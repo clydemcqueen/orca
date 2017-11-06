@@ -5,12 +5,14 @@
 #include "orca_msgs/Thrusters.h"
 
 // Limits
+// TODO move to shared .h file
+// TODO clamp param inputs to these limits
 #define THRUSTER_MIN -1.0
 #define THRUSTER_MAX  1.0
 #define TILT_MIN     -45
 #define TILT_MAX      45
-#define LIGHTS_MIN    0.0
-#define LIGHTS_MAX    1.0
+#define LIGHTS_MIN    0
+#define LIGHTS_MAX    100
 
 #define PI 3.14159
 
@@ -53,7 +55,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   nh_.param("inc_yaw", inc_yaw_, PI/36);
   nh_.param("inc_depth", inc_depth_, 0.1);
   nh_.param("inc_tilt", inc_tilt_, 5);
-  nh_.param("inc_lights", inc_lights_, 0.2);
+  nh_.param("inc_lights", inc_lights_, 20);
   nh_.param("input_dead_band", input_dead_band_, 0.05);             // Don't respond to tiny joystick movements
   nh_.param("effort_dead_band", effort_dead_band_, 0.01);           // Don't publish tiny thruster efforts
   
