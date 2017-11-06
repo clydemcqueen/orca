@@ -1,9 +1,9 @@
 <launch>
 
   <!-- Launch the joystick driver -->
-  <node name="joystick" pkg="joy" type="joy_node" output="screen"/>
+  <node name="joystick" pkg="joy" type="joy_node" output="screen" />
 
   <!-- Launch rviz; TODO add configuration -->
-  <node name="rviz" pkg="rviz" type="rviz" output="screen"/>
+  <node name="rviz" pkg="rviz" type="rviz" output="screen" />
 
 </launch>

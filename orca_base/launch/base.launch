@@ -15,8 +15,8 @@
 
   <!-- Launch the yaw pid controller -->
   <node name="yaw_pid" pkg="pid" type="controller" output="log">
-    <param name="node_name" value="yaw_pid_node"/>
-    <param name="angle_error" value="true"/> <!-- Treat control variable as an angle in radians -->
+    <param name="node_name" value="yaw_pid_node" />
+    <param name="angle_error" value="true" /> <!-- Treat control variable as an angle in radians -->
     <param name="Kp" value="0.6" />
     <param name="Ki" value="0.1" />
     <param name="Kd" value="0.2" />
