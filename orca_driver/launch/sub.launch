@@ -3,12 +3,12 @@
   <!-- Pololu Maestro -->
   <node name="orca_driver" pkg="orca_driver" type="orca_driver" output="log">
     <param name="voltage_multiplier" value="5.73" />
-    <param name="thruster_1_channel" value="5" />
-    <param name="thruster_2_channel" value="4" />
-    <param name="thruster_3_channel" value="3" />
-    <param name="thruster_4_channel" value="1" />
-    <param name="thruster_5_channel" value="2" />
-    <param name="thruster_6_channel" value="0" />
+    <param name="thruster_1_channel" value="0" />
+    <param name="thruster_2_channel" value="1" />
+    <param name="thruster_3_channel" value="2" />
+    <param name="thruster_4_channel" value="3" />
+    <param name="thruster_5_channel" value="4" />
+    <param name="thruster_6_channel" value="5" />
     <param name="tilt_channel" value="6" />
   </node>
 
