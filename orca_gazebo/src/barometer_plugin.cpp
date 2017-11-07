@@ -103,7 +103,7 @@ public:
   // The update event is broadcast at the sensor frequency, roughly 60Hz
   void OnUpdate()
   {
-    constexpr double atmospheric_pressure = 1013.25;  // mbar
+    constexpr double atmospheric_pressure = 101325;   // Pascals
     constexpr double gravity = 9.80665;               // m/s^2
 
     orca_msgs::Barometer baro_msg;
@@ -111,9 +111,9 @@ public:
 
     if (depth >= 0.0)
     {
-      baro_msg.depth = depth;                                                             // m
-      baro_msg.pressure = fluid_density_ * gravity * depth / 100 + atmospheric_pressure;  // mbar
-      baro_msg.temperature = 10;                                                          // Celsius
+      baro_msg.depth = depth;                                                       // m
+      baro_msg.pressure = fluid_density_ * gravity * depth + atmospheric_pressure;  // Pascals
+      baro_msg.temperature = 10;                                                    // Celsius
     }
     else
     {

@@ -1,4 +1,4 @@
-# Pressure in mbar
+# Pressure in Pascals
 float32 pressure
 
 # Temperature in Celsius
