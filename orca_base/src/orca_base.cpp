@@ -151,7 +151,7 @@ void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg
 {
   if (mode_ == Mode::depth_hold)
   {
-    vertical_effort_ = dead_band(msg->data, effort_dead_band_);  
+    vertical_effort_ = dead_band(-msg->data, effort_dead_band_);  
   }
 }
 
@@ -241,6 +241,9 @@ void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
 // New input from the gamepad
 void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 {
+  constexpr double depth_hold_min = 0.05; // Hover just below the surface of the water
+  constexpr double depth_hold_max = 50;   // Margin of safety
+
   // Arm/disarm
   if (joy_msg->buttons[joy_button_disarm_])
   {
@@ -279,7 +282,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   else if (joy_msg->buttons[joy_button_surface_])
   {
     ROS_INFO("Surface");
-    setMode(Mode::depth_hold, 10.0); // TODO create notion of 'underwater' in gazebo, and set target depth to 0
+    setMode(Mode::depth_hold, depth_hold_min);
   }
 
   // Yaw trim
@@ -306,8 +309,8 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     // Rising edge
     if (mode_ == Mode::depth_hold)
     {
-      // TODO clamp this to the surface
-      depth_setpoint_ = joy_msg->axes[joy_axis_vertical_trim_] > 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_;
+      depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
+        depth_hold_min, depth_hold_max);
       publishDepthSetpoint();
     }
 
@@ -390,8 +393,6 @@ void OrcaBase::spinOnce(const ros::TimerEvent &event)
   thrusters_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
   thrusters_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
   thrusters_pub_.publish(thrusters_msg);
-
-  // TODO publish odometry
 }
 
 } // namespace orca_base

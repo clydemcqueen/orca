@@ -44,7 +44,7 @@ catkin_make --only-pkg-with-deps orca_msgs orca_description orca_base orca_gazeb
 
 Run the simulation:
 ~~~~
-roslaunch orca_gazebo orca.launch
+roslaunch --screen orca_gazebo orca.launch
 ~~~~
 
 Plug in your gamepad, hit the [menu button](https://support.xbox.com/en-US/xbox-one/accessories/xbox-one-wireless-controller) to arm the thrusters and start driving around. Here's how the buttons are mapped:
