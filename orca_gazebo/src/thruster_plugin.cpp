@@ -8,7 +8,7 @@
 #include "ros/callback_queue.h"
 #include "ros/subscribe_options.h"
 
-#include "orca_msgs/Thruster.h"
+#include "orca_msgs/Thrusters.h"
 
 namespace gazebo
 {
@@ -118,7 +118,7 @@ public:
     ROS_INFO("ThrusterPlugin will listen on ROS topic %s", ros_topic.c_str());
 
     // Subscribe to the topic
-    ros::SubscribeOptions so = ros::SubscribeOptions::create<orca_msgs::Thruster>(ros_topic, 1,
+    ros::SubscribeOptions so = ros::SubscribeOptions::create<orca_msgs::Thrusters>(ros_topic, 1,
         boost::bind(&ThrusterPlugin::OnRosMsg, this, _1), ros::VoidPtr(), &callback_queue_);
     thruster_sub_ = nh_->subscribe(so);
     
