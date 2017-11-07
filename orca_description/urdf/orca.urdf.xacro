@@ -210,6 +210,8 @@
       <update_rate>60</update_rate>
       <plugin name="BarometerPlugin" filename="libBarometerPlugin.so">
         <ros_topic>/barometer</ros_topic>
+        <surface>9</surface>
+        <fluid_density>${FLUID_DENSITY}</fluid_density>
       </plugin>
     </sensor>
   </gazebo>
