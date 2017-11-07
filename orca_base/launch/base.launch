@@ -8,7 +8,7 @@
 
   <!-- Launch some state publishers -->
   <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" output="log" />
-  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" output="log" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="log" />
 
   <!-- Launch orca_base -->
   <node name="orca_base" pkg="orca_base" type="orca_base" output="log" />
