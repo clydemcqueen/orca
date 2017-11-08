@@ -5,6 +5,7 @@
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Joy.h>
+#include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include "orca_msgs/Barometer.h"
 
@@ -50,7 +51,11 @@ private:
   double input_dead_band_;
   double effort_dead_band_;
 
-  Mode mode_;  
+  // General state
+  Mode mode_;
+  bool imu_ready_;        // True if we've received at least one imu message
+  bool barometer_ready_;  // True if we've received at least one baromater message
+  geometry_msgs::Quaternion imu_orientation_;
 
   // Yaw pid control state
   double yaw_state_;
@@ -75,7 +80,7 @@ private:
   // Lights
   int lights_;
   bool lights_trim_button_previous_;
-  
+
   // Subscriptions
   ros::Subscriber baro_sub_;
   ros::Subscriber imu_sub_;
@@ -100,12 +105,14 @@ private:
   ros::Publisher depth_setpoint_pub_;
   ros::Publisher camera_tilt_pub_;
   ros::Publisher lights_pub_;
+  tf::TransformBroadcaster tf_broadcaster_;
   
   // Helpers
   void publishYawSetpoint();
   void publishDepthSetpoint();
   void publishCameraTilt();
   void publishLights();
+  void publishOdom();
   void setMode(Mode mode, double depth_setpoint);
   
 public:

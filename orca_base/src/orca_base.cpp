@@ -37,6 +37,8 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   nh_{nh},
   tf_{tf},
   mode_{Mode::disarmed},
+  imu_ready_{false},
+  barometer_ready_{false},
   forward_effort_{0},
   yaw_effort_{0},
   strafe_effort_{0},
@@ -94,6 +96,11 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
 void OrcaBase::baroCallback(const orca_msgs::Barometer::ConstPtr& baro_msg)
 {
   depth_state_ = baro_msg->depth;
+  if (!barometer_ready_)
+  {
+    barometer_ready_ = true;
+    ROS_INFO("Barometer ready, depth %g", depth_state_);
+  }
 }
 
 // New imu reading
@@ -106,6 +113,13 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
 
   yaw_state_ = yaw;
+  imu_orientation_ = msg->orientation;
+
+  if (!imu_ready_)
+  {
+    imu_ready_ = true;
+    ROS_INFO("IMU ready, roll %g pitch %g yaw %g", roll, pitch, yaw);
+  }
 }
 
 // Result of yaw pid controller
@@ -128,16 +142,22 @@ void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg
 
 void OrcaBase::publishYawSetpoint()
 {
-  std_msgs::Float64 setpoint;
-  setpoint.data = yaw_setpoint_;
-  yaw_setpoint_pub_.publish(setpoint);
+  if (imu_ready_)
+  {
+      std_msgs::Float64 setpoint;
+      setpoint.data = yaw_setpoint_;
+      yaw_setpoint_pub_.publish(setpoint);  
+  }
 }
 
 void OrcaBase::publishDepthSetpoint()
 {
-  std_msgs::Float64 setpoint;
-  setpoint.data = depth_setpoint_;
-  depth_setpoint_pub_.publish(setpoint);
+  if (barometer_ready_)
+  {
+    std_msgs::Float64 setpoint;
+    setpoint.data = depth_setpoint_;
+    depth_setpoint_pub_.publish(setpoint);  
+  }
 }
 
 void OrcaBase::publishCameraTilt()
@@ -152,6 +172,26 @@ void OrcaBase::publishLights()
   orca_msgs::Lights msg;
   msg.brightness = lights_;
   lights_pub_.publish(msg);
+}
+
+void OrcaBase::publishOdom()
+{
+  if (imu_ready_ && barometer_ready_)
+  {
+    // Publish a transform from base_link to odom with rpy (from the imu) and z (from the barometer)
+    geometry_msgs::TransformStamped odom_tf;
+    odom_tf.header.stamp = ros::Time::now();
+    odom_tf.header.frame_id = "odom"; // TODO param
+    odom_tf.child_frame_id = "base_link"; // TODO param
+    odom_tf.transform.translation.x = 0;
+    odom_tf.transform.translation.y = 0;
+    odom_tf.transform.translation.z = -depth_state_;
+    odom_tf.transform.rotation = imu_orientation_;
+    tf_broadcaster_.sendTransform(odom_tf);
+
+    // TODO estimate x and y from thruster and imu data
+    // TODO publish an odometry message with both pose and velocity
+  }
 }
 
 // Change operation mode
@@ -242,18 +282,39 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
   else if (joy_msg->buttons[joy_button_stabilize_])
   {
-    ROS_INFO("Stabilize");
-    setMode(Mode::stabilize);
+    if (imu_ready_)
+    {
+      ROS_INFO("Stabilize");
+      setMode(Mode::stabilize);
+    }
+    else
+    {
+      ROS_ERROR("IMU not ready, can't stabilize");
+    }
   }
   else if (joy_msg->buttons[joy_button_depth_hold_])
   {
-    ROS_INFO("Depth hold");
-    setMode(Mode::depth_hold, depth_state_);
+    if (imu_ready_ && barometer_ready_)
+    {
+      ROS_INFO("Depth hold");
+      setMode(Mode::depth_hold, depth_state_);  
+    }
+    else
+    {
+      ROS_ERROR("Barometer and/or IMU not ready, can't hold depth");
+    }
   }
   else if (joy_msg->buttons[joy_button_surface_])
   {
-    ROS_INFO("Surface");
-    setMode(Mode::depth_hold, depth_hold_min);
+    if (imu_ready_ && barometer_ready_)
+    {
+      ROS_INFO("Surface");
+      setMode(Mode::depth_hold, depth_hold_min);
+      }
+    else
+    {
+      ROS_ERROR("Barometer and/or IMU not ready, can't automatically surface");
+    }
   }
 
   // Yaw trim
@@ -364,6 +425,9 @@ void OrcaBase::spinOnce(const ros::TimerEvent &event)
   thrusters_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
   thrusters_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
   thrusters_pub_.publish(thrusters_msg);
+
+  // Publish odometry
+  publishOdom();
 }
 
 } // namespace orca_base
