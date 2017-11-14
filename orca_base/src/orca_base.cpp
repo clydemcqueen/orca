@@ -1,4 +1,6 @@
 #include <std_msgs/Bool.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "orca_base/orca_base.h"
 #include "orca_msgs/Camera.h"
 #include "orca_msgs/Lights.h"
@@ -31,7 +33,7 @@ constexpr const T clamp(const T v, const T min, const T max)
 
 namespace orca_base {
 
-OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
+OrcaBase::OrcaBase(ros::NodeHandle &nh, tf2_ros::TransformListener &tf):
   nh_{nh},
   tf_{tf},
   mode_{Mode::disarmed},
@@ -73,7 +75,17 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
 
   // TODO simulate a rotated imu and remove this hack
   nh_.param("simulation", simulation_, true);
-  imu_rotation_ = simulation_ ? tf::createIdentityQuaternion() : tf::createQuaternionFromRPY(-M_PI/2, -M_PI/2, 0).inverse().normalize();
+  if (simulation_)
+  {
+    imu_rotation_ = tf2::Quaternion::getIdentity();
+  }
+  else
+  {
+    // TODO listen for this transform
+    tf2::Quaternion imu_orientation;
+    imu_orientation.setRPY(-M_PI/2, -M_PI/2, 0);
+    imu_rotation_ =  imu_orientation.inverse();
+  }
 
   // Set up all subscriptions
   baro_sub_ = nh_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
@@ -109,13 +121,13 @@ void OrcaBase::baroCallback(const orca_msgs::Barometer::ConstPtr& baro_msg)
 void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 {
   // IMU orientation, rotated to account for the placement in the ROV
-  tf::Quaternion imu_orientation;
-  tf::quaternionMsgToTF(msg->orientation, imu_orientation);
+  tf2::Quaternion imu_orientation;
+  tf2::fromMsg(msg->orientation, imu_orientation);
   base_orientation_ = imu_orientation * imu_rotation_;
 
   // Pull out the yaw for convenience
   double roll, pitch;
-  tf::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
+  tf2::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
 
   if (!imu_ready_)
   {
@@ -188,7 +200,7 @@ void OrcaBase::publishOdom()
     odom_tf.transform.translation.x = 0;
     odom_tf.transform.translation.y = 0;
     odom_tf.transform.translation.z = -depth_state_;
-    tf::quaternionTFToMsg(base_orientation_, odom_tf.transform.rotation);
+    odom_tf.transform.rotation = tf2::toMsg(base_orientation_);
     tf_broadcaster_.sendTransform(odom_tf);
 
     // TODO estimate x and y from thruster and imu data
@@ -438,7 +450,8 @@ int main(int argc, char **argv)
 {
   ros::init(argc, argv, "orca_base");
   ros::NodeHandle nh{"~"};
-  tf::TransformListener tf{nh};
+  tf2_ros::Buffer tf_buffer;
+  tf2_ros::TransformListener tf{tf_buffer};
   orca_base::OrcaBase orca_base{nh, tf};
 
   ros::Timer t = nh.createTimer(ros::Duration(1.0 / SPIN_RATE), &orca_base::OrcaBase::spinOnce, &orca_base);

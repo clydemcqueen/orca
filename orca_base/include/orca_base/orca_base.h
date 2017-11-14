@@ -5,8 +5,9 @@
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Joy.h>
-#include <tf/transform_broadcaster.h>
-#include <tf/transform_listener.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 #include "orca_msgs/Barometer.h"
 
 namespace orca_base {
@@ -24,7 +25,7 @@ class OrcaBase
 {
 private:
   ros::NodeHandle &nh_;
-  tf::TransformListener &tf_;
+  tf2_ros::TransformListener &tf_;
 
   // Parameters from the parameter server
   int joy_axis_yaw_;
@@ -50,13 +51,13 @@ private:
   float input_dead_band_;
   double effort_dead_band_;
   bool simulation_;
-  tf::Quaternion imu_rotation_;
+  tf2::Quaternion imu_rotation_;
 
   // General state
   Mode mode_;
   bool imu_ready_;                    // True if we've received at least one imu message
   bool barometer_ready_;              // True if we've received at least one barometer message
-  tf::Quaternion base_orientation_;   // Current orientation
+  tf2::Quaternion base_orientation_;  // Current orientation
 
   // Yaw pid control state
   double yaw_state_;
@@ -106,7 +107,7 @@ private:
   ros::Publisher depth_setpoint_pub_;
   ros::Publisher camera_tilt_pub_;
   ros::Publisher lights_pub_;
-  tf::TransformBroadcaster tf_broadcaster_;
+  tf2_ros::TransformBroadcaster tf_broadcaster_;
   
   // Helpers
   void publishYawSetpoint();
@@ -117,7 +118,7 @@ private:
   void setMode(Mode mode, double depth_setpoint);
   
 public:
-  explicit OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf);
+  explicit OrcaBase(ros::NodeHandle &nh, tf2_ros::TransformListener &tf);
   ~OrcaBase() {}; // Suppress default copy and move constructors
 
   void spinOnce(const ros::TimerEvent &event);
