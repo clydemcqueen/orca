@@ -22,6 +22,8 @@
   <include file="$(find orca_driver)/launch/imu.launch" />
 
   <!-- Orca base -->
-  <include file="$(find orca_base)/launch/base.launch" />
+  <include file="$(find orca_base)/launch/base.launch">
+    <arg name="simulation" value="false" />
+  </include>
 
 </launch>

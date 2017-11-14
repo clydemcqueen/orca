@@ -26,13 +26,13 @@ private:
   ros::NodeHandle &nh_;
   tf::TransformListener &tf_;
 
+  // Parameters from the parameter server
   int joy_axis_yaw_;
   int joy_axis_forward_;
   int joy_axis_strafe_;
   int joy_axis_vertical_;
   int joy_axis_yaw_trim_;
   int joy_axis_vertical_trim_;
-
   int joy_button_disarm_;
   int joy_button_arm_;
   int joy_button_manual_;
@@ -43,19 +43,20 @@ private:
   int joy_button_tilt_up_;
   int joy_button_bright_;
   int joy_button_dim_;
-
   double inc_yaw_;
   double inc_depth_;
   int inc_tilt_;
   int inc_lights_;
   double input_dead_band_;
   double effort_dead_band_;
+  bool simulation_;
+  tf::Quaternion imu_rotation_;
 
   // General state
   Mode mode_;
-  bool imu_ready_;        // True if we've received at least one imu message
-  bool barometer_ready_;  // True if we've received at least one baromater message
-  geometry_msgs::Quaternion imu_orientation_;
+  bool imu_ready_;                    // True if we've received at least one imu message
+  bool barometer_ready_;              // True if we've received at least one baromater message
+  tf::Quaternion base_orientation_;   // Current orientation
 
   // Yaw pid control state
   double yaw_state_;

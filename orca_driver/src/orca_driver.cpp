@@ -95,6 +95,14 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
     {
       double effort = msg->effort[i];
       effort = clamp(effort, -thruster_limit_, thruster_limit_);
+
+      // Compensate for ESC programming errors
+      // TODO generalize this
+      if (i == 3)
+      {
+        effort = -effort;
+      }
+
       maestro_.setPWM(thruster_channels_[i], servo_pulse_width(effort, -1.0, 1.0, 1100, 1900));
     }
   }

@@ -10,6 +10,8 @@
 
   <node pkg="nodelet" type="nodelet" name="PhidgetsImuNodelet" args="load phidgets_imu/PhidgetsImuNodelet imu_manager" output="log">
 
+    <param name="frame_id" value="imu_link" />
+
     # supported data rates: 4 8 16 24 32 40 ... 1000 (in ms)
     <param name="period" value="8" />
 
@@ -37,9 +39,12 @@
 
   <node pkg="nodelet" type="nodelet" name="ImuFilterNodelet" args="load imu_filter_madgwick/ImuFilterNodelet imu_manager" output="log">
 
-    <param name="use_mag" value="true" />
-    <param name="use_magnetic_field_msg" value="true" />
-    <param name="world_frame" value="enu" /> <!-- ROS default is enu (vs. marine ned), stick w/ enu for now -->
+    <param name="use_mag" value="true" /> <!-- Use magnetic field data -->
+    <param name="use_magnetic_field_msg" value="true" /> <!-- Use the new msg type -->
+    <param name="publish_tf" value="false" /> <!-- Do not publish a transform, orca_base will do that -->
+    <param name="world_frame" value="enu" /> <!-- Use ROS default world coordinate system per rep 145 -->
+    <param name="fixed_frame" value="odom" /> <!-- Name of the world frame -->
+    <param name="stateless" value="false" /> <!-- Debugging -->
 
   </node>
 

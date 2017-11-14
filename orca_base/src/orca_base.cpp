@@ -72,10 +72,14 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   nh_.param("inc_lights", inc_lights_, 20);
   nh_.param("input_dead_band", input_dead_band_, 0.05);             // Don't respond to tiny joystick movements
   nh_.param("effort_dead_band", effort_dead_band_, 0.01);           // Don't publish tiny thruster efforts
-  
+
+  // TODO simulate a rotated imu and remove this hack
+  nh_.param("simulation", simulation_, true);
+  imu_rotation_ = simulation_ ? tf::createIdentityQuaternion() : tf::createQuaternionFromRPY(-PI/2, -PI/2, 0).inverse().normalize();
+
   // Set up all subscriptions
   baro_sub_ = nh_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
-  imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu", 10, &OrcaBase::imuCallback, this);
+  imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   yaw_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/yaw_control_effort", 10, &OrcaBase::yawControlEffortCallback, this);
   depth_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
@@ -106,19 +110,19 @@ void OrcaBase::baroCallback(const orca_msgs::Barometer::ConstPtr& baro_msg)
 // New imu reading
 void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 {
-  tf::Quaternion q;
-  double roll, pitch, yaw;
+  // IMU orientation, rotated to account for the placement in the ROV
+  tf::Quaternion imu_orientation;
+  tf::quaternionMsgToTF(msg->orientation, imu_orientation);
+  base_orientation_ = imu_orientation * imu_rotation_;
 
-  tf::quaternionMsgToTF(msg->orientation, q);
-  tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
-
-  yaw_state_ = yaw;
-  imu_orientation_ = msg->orientation;
+  // Pull out the yaw for convenience
+  double roll, pitch;
+  tf::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
 
   if (!imu_ready_)
   {
     imu_ready_ = true;
-    ROS_INFO("IMU ready, roll %g pitch %g yaw %g", roll, pitch, yaw);
+    ROS_INFO("IMU ready, roll %4.2f pitch %4.2f yaw %4.2f", roll, pitch, yaw_state_);
   }
 }
 
@@ -186,7 +190,7 @@ void OrcaBase::publishOdom()
     odom_tf.transform.translation.x = 0;
     odom_tf.transform.translation.y = 0;
     odom_tf.transform.translation.z = -depth_state_;
-    odom_tf.transform.rotation = imu_orientation_;
+    tf::quaternionTFToMsg(base_orientation_, odom_tf.transform.rotation);
     tf_broadcaster_.sendTransform(odom_tf);
 
     // TODO estimate x and y from thruster and imu data

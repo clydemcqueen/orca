@@ -1,5 +1,7 @@
 <launch>
 
+  <arg name="simulation" default="true" />
+
   <!-- Filepath for the robot description file; can be overridden -->
   <arg name="model" default="$(find orca_description)/urdf/orca.urdf.xacro" />
 
@@ -11,7 +13,9 @@
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="log" />
 
   <!-- Launch orca_base -->
-  <node name="orca_base" pkg="orca_base" type="orca_base" output="log" />
+  <node name="orca_base" pkg="orca_base" type="orca_base" output="log">
+    <param name="simulation" value="$(arg simulation)" />
+  </node>
 
   <!-- Launch the yaw pid controller -->
   <node name="yaw_pid" pkg="pid" type="controller" output="log">
@@ -20,9 +24,9 @@
     <param name="Kp" value="0.6" />
     <param name="Ki" value="0.1" />
     <param name="Kd" value="0.2" />
-    <param name="upper_limit" value="1" />
-    <param name="lower_limit" value="-1" />
-    <param name="windup_limit" value="1" />
+    <param name="upper_limit" value="0.1" />
+    <param name="lower_limit" value="-0.1" />
+    <param name="windup_limit" value="0.1" />
     <param name="max_loop_frequency" value="100.0" />
     <param name="min_loop_frequency" value="100.0" />
     <remap from="pid_enable" to="/yaw_pid_enable" />
@@ -37,9 +41,9 @@
     <param name="Kp" value="0.6" />
     <param name="Ki" value="0.1" />
     <param name="Kd" value="0.2" />
-    <param name="upper_limit" value="1" />
-    <param name="lower_limit" value="-1" />
-    <param name="windup_limit" value="1" />
+    <param name="upper_limit" value="0.1" />
+    <param name="lower_limit" value="-0.1" />
+    <param name="windup_limit" value="0.1" />
     <param name="max_loop_frequency" value="100.0" />
     <param name="min_loop_frequency" value="100.0" />
     <remap from="pid_enable" to="/depth_pid_enable" />
