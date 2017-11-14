@@ -28,7 +28,7 @@ namespace gazebo
 // We listen for ROS Thruster messages and apply thrust forces to base_link.
 //
 // There can the multiple <thruster> tags; the number and order of <thruster> tags must match
-// the number and order of float32s in the Thruster message. Each float indicates effort and
+// the number and order of float64s in the Thruster message. Each float indicates effort and
 // ranges from -1.0 (full reverse) to 1.0 (full forward).
 //
 //    <ros_topic> specifics the topic for Thruster messages. Default is /thrusters.

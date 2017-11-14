@@ -47,7 +47,7 @@ private:
   double inc_depth_;
   int inc_tilt_;
   int inc_lights_;
-  double input_dead_band_;
+  float input_dead_band_;
   double effort_dead_band_;
   bool simulation_;
   tf::Quaternion imu_rotation_;
@@ -55,7 +55,7 @@ private:
   // General state
   Mode mode_;
   bool imu_ready_;                    // True if we've received at least one imu message
-  bool barometer_ready_;              // True if we've received at least one baromater message
+  bool barometer_ready_;              // True if we've received at least one barometer message
   tf::Quaternion base_orientation_;   // Current orientation
 
   // Yaw pid control state

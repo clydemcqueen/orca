@@ -20,6 +20,7 @@ class OrcaDriver
 private:
   ros::NodeHandle &nh_;
 
+  // Parameters
   int num_thrusters_;
   std::vector<int> thruster_channels_;
   double thruster_limit_;
@@ -32,6 +33,7 @@ private:
   double voltage_multiplier_;
   double voltage_min_;
 
+  // State
   maestro::Maestro maestro_;
   orca_msgs::Battery battery_msg_;
   orca_msgs::Leak leak_msg_;

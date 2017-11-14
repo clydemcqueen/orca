@@ -7,17 +7,15 @@
 // Limits
 // TODO move to shared .h file
 // TODO clamp param inputs to these limits
-#define THRUSTER_MIN -1.0
-#define THRUSTER_MAX  1.0
-#define TILT_MIN     -45
-#define TILT_MAX      45
-#define LIGHTS_MIN    0
-#define LIGHTS_MAX    100
-
-#define PI 3.14159
+constexpr double THRUSTER_MIN = -1.0;
+constexpr double THRUSTER_MAX = 1.0;
+constexpr int TILT_MIN = -45;
+constexpr int TILT_MAX = 45;
+constexpr int LIGHTS_MIN = 0;
+constexpr int LIGHTS_MAX = 100;
 
 // Message publish rate in Hz
-#define SPIN_RATE 50
+constexpr int SPIN_RATE = 50;
 
 template<class T>
 constexpr const T dead_band(const T v, const T d)
@@ -66,16 +64,16 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   nh_.param("joy_button_bright", joy_button_bright_, 9);            // Left stick
   nh_.param("joy_button_dim", joy_button_dim_, 10);                 // Right stick
 
-  nh_.param("inc_yaw", inc_yaw_, PI/36);
+  nh_.param("inc_yaw", inc_yaw_, M_PI/36);
   nh_.param("inc_depth", inc_depth_, 0.1);
   nh_.param("inc_tilt", inc_tilt_, 5);
   nh_.param("inc_lights", inc_lights_, 20);
-  nh_.param("input_dead_band", input_dead_band_, 0.05);             // Don't respond to tiny joystick movements
+  nh_.param("input_dead_band", input_dead_band_, 0.05f);            // Don't respond to tiny joystick movements
   nh_.param("effort_dead_band", effort_dead_band_, 0.01);           // Don't publish tiny thruster efforts
 
   // TODO simulate a rotated imu and remove this hack
   nh_.param("simulation", simulation_, true);
-  imu_rotation_ = simulation_ ? tf::createIdentityQuaternion() : tf::createQuaternionFromRPY(-PI/2, -PI/2, 0).inverse().normalize();
+  imu_rotation_ = simulation_ ? tf::createIdentityQuaternion() : tf::createQuaternionFromRPY(-M_PI/2, -M_PI/2, 0).inverse().normalize();
 
   // Set up all subscriptions
   baro_sub_ = nh_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
@@ -140,7 +138,7 @@ void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg
 {
   if (mode_ == Mode::depth_hold)
   {
-    vertical_effort_ = dead_band(-msg->data, effort_dead_band_);  
+    vertical_effort_ = dead_band(-msg->data, effort_dead_band_);
   }
 }
 
@@ -362,7 +360,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if ((joy_msg->buttons[joy_button_tilt_up_] || joy_msg->buttons[joy_button_tilt_down_]) && !tilt_trim_button_previous_)
   {
     // Rising edge
-    tilt_ = clamp(joy_msg->buttons[joy_button_tilt_up_] ? tilt_ + inc_tilt_ : tilt_ - inc_tilt_, TILT_MIN, TILT_MAX);
+    tilt_ = clamp(tilt_ + joy_msg->buttons[joy_button_tilt_up_] ? inc_tilt_ : -inc_tilt_, TILT_MIN, TILT_MAX);
     publishCameraTilt();
     tilt_trim_button_previous_ = true;
   }
@@ -376,7 +374,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if ((joy_msg->buttons[joy_button_bright_] || joy_msg->buttons[joy_button_dim_]) && !lights_trim_button_previous_)
   {
   // Rising edge
-    lights_ = clamp(joy_msg->buttons[joy_button_bright_] ? lights_ + inc_lights_ : lights_ - inc_lights_, LIGHTS_MIN, LIGHTS_MAX);
+    lights_ = clamp(lights_ + joy_msg->buttons[joy_button_bright_] ? inc_lights_ : -inc_lights_, LIGHTS_MIN, LIGHTS_MAX);
     publishLights();
     lights_trim_button_previous_ = true;
   }
@@ -387,15 +385,15 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 
   // Thrusters
-  forward_effort_ = dead_band((double)joy_msg->axes[joy_axis_forward_], input_dead_band_);
+  forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_);
   if (mode_ == Mode::manual)
   {
-    yaw_effort_ = dead_band((double)joy_msg->axes[joy_axis_yaw_], input_dead_band_);
+    yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_);
   }
-  strafe_effort_ = dead_band((double)joy_msg->axes[joy_axis_strafe_], input_dead_band_);
+  strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_);
   if (mode_ == Mode::manual || mode_ == Mode::stabilize)
   {
-    vertical_effort_ = dead_band((double)joy_msg->axes[joy_axis_vertical_], input_dead_band_);
+    vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_);
   }
 }
 

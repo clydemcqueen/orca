@@ -6,9 +6,9 @@ constexpr const T clamp(const T v, const T min, const T max)
   return v > max ? max : (v < min ? min : v);
 }
   
-constexpr const int servo_pulse_width(const float v, const float v_min, const float v_max, const unsigned int pwm_min, const unsigned int pwm_max)
+constexpr const uint16_t servo_pulse_width(const double v, const double v_min, const double v_max, const uint16_t pwm_min, const uint16_t pwm_max)
 {
-  return clamp(pwm_min + static_cast<unsigned int>(static_cast<float>(pwm_max - pwm_min) / (v_max - v_min) * (v - v_min)), pwm_min, pwm_max);
+  return clamp(static_cast<uint16_t>(pwm_min + static_cast<double>(pwm_max - pwm_min) / (v_max - v_min) * (v - v_min)), pwm_min, pwm_max);
 }
 
 namespace orca_driver {
@@ -39,7 +39,7 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
   ROS_INFO("Camera servo on channel %d", tilt_channel_);
   
   nh_.param("voltage_channel", voltage_channel_, 11); // Must be analog input
-  nh_.param("voltage_multiplier", voltage_multiplier_, 47.0/10.0);
+  nh_.param("voltage_multiplier", voltage_multiplier_, 4.7);
   nh_.param("voltage_min", voltage_min_, 12.0);
   ROS_INFO("Voltage sensor on channel %d, multiplier is %g, minimum is %g", voltage_channel_, voltage_multiplier_, voltage_min_);
 
@@ -63,9 +63,9 @@ void OrcaDriver::cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    int pwm = servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900);
+    uint16_t pwm = servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900);
     ROS_DEBUG("Set tilt pulse width to %d", pwm);
-    maestro_.setPWM(tilt_channel_, pwm);
+    maestro_.setPWM(static_cast<uint8_t>(tilt_channel_), pwm);
   }
   else
   {
@@ -77,9 +77,9 @@ void OrcaDriver::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    int pwm = servo_pulse_width(msg->brightness, 0, 100, 1100, 1900);
+    uint16_t pwm = servo_pulse_width(msg->brightness, 0, 100, 1100, 1900);
     ROS_DEBUG("Set lights pulse width to %d", pwm);
-    maestro_.setPWM(lights_channel_, pwm);
+    maestro_.setPWM(static_cast<uint8_t>(lights_channel_), pwm);
   }
   else
   {
@@ -103,7 +103,7 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
         effort = -effort;
       }
 
-      maestro_.setPWM(thruster_channels_[i], servo_pulse_width(effort, -1.0, 1.0, 1100, 1900));
+      maestro_.setPWM(static_cast<uint8_t>(thruster_channels_[i]), servo_pulse_width(effort, -1.0, 1.0, 1100, 1900));
     }
   }
   else
@@ -114,8 +114,8 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
 
 bool OrcaDriver::readBattery()
 {
-  float temp;
-  if (maestro_.ready() && maestro_.getAnalog(voltage_channel_, temp))
+  double temp;
+  if (maestro_.ready() && maestro_.getAnalog(static_cast<uint8_t>(voltage_channel_), temp))
   {
     battery_msg_.voltage = temp * voltage_multiplier_;
     return true;
@@ -130,9 +130,9 @@ bool OrcaDriver::readBattery()
 bool OrcaDriver::readLeak()
 {
   bool temp;
-  if (maestro_.ready() && maestro_.getDigital(leak_channel_, temp))
+  if (maestro_.ready() && maestro_.getDigital(static_cast<uint8_t>(leak_channel_), temp))
   {
-    leak_msg_.leak_detected = temp ? 1 : 0; // TODO why isn't this a bool in the message?
+    leak_msg_.leak_detected = temp;
     return true;
   }
   else
@@ -177,8 +177,8 @@ bool OrcaDriver::preDive()
 
   for (int i = 0; i < thruster_channels_.size(); ++i)
   {
-    unsigned short value;
-    maestro_.getPWM(thruster_channels_[i], value);
+    uint16_t value;
+    maestro_.getPWM(static_cast<uint8_t>(thruster_channels_[i]), value);
     ROS_INFO("Thruster %d is set at %d", i + 1, value);
     if (value != 1500) // TODO constant
     {
