@@ -5,18 +5,19 @@ project(orca_base)
 find_package(catkin REQUIRED COMPONENTS
   orca_msgs
   roscpp
-  rospy
   sensor_msgs
   std_msgs
   tf
 )
 
-## Declare downstream dependencies
+## Declare a catkin package and export dependencies
 catkin_package(
   CATKIN_DEPENDS
     orca_msgs
     roscpp
-    rospy
+    sensor_msgs
+    std_msgs
+    tf
 )
 
 ## Set up include directories
