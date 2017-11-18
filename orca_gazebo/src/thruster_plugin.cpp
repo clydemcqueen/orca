@@ -8,7 +8,7 @@
 #include "ros/callback_queue.h"
 #include "ros/subscribe_options.h"
 
-#include "orca_msgs/Thruster.h"
+#include "orca_msgs/Thrusters.h"
 
 namespace gazebo
 {
@@ -28,7 +28,7 @@ namespace gazebo
 // We listen for ROS Thruster messages and apply thrust forces to base_link.
 //
 // There can the multiple <thruster> tags; the number and order of <thruster> tags must match
-// the number and order of float32s in the Thruster message. Each float indicates effort and
+// the number and order of float64s in the Thruster message. Each float indicates effort and
 // ranges from -1.0 (full reverse) to 1.0 (full forward).
 //
 //    <ros_topic> specifics the topic for Thruster messages. Default is /thrusters.
@@ -118,7 +118,7 @@ public:
     ROS_INFO("ThrusterPlugin will listen on ROS topic %s", ros_topic.c_str());
 
     // Subscribe to the topic
-    ros::SubscribeOptions so = ros::SubscribeOptions::create<orca_msgs::Thruster>(ros_topic, 1,
+    ros::SubscribeOptions so = ros::SubscribeOptions::create<orca_msgs::Thrusters>(ros_topic, 1,
         boost::bind(&ThrusterPlugin::OnRosMsg, this, _1), ros::VoidPtr(), &callback_queue_);
     thruster_sub_ = nh_->subscribe(so);
     
@@ -159,7 +159,7 @@ public:
   }
 
   // Handle an incoming message from ROS
-  void OnRosMsg(const orca_msgs::ThrusterConstPtr &msg)
+  void OnRosMsg(const orca_msgs::ThrustersConstPtr &msg)
   {
     for (int i = 0; i < thrusters_.size() && i < msg->effort.size(); ++i)
     {

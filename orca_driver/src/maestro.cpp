@@ -53,12 +53,12 @@ bool Maestro::ready()
 }
 
 // Set the servo / ESC PWM signal, value is in microseconds, return true if successful
-bool Maestro::set_pwm(unsigned char channel, unsigned short value)
+bool Maestro::setPWM(uint8_t channel, uint16_t value)
 {
   if (ready())
   {
     value *= 4; // Maestro units are 0.25us, e.g., 1500us becomes 6000qus
-    unsigned char cmd[4] = {0x84, channel, static_cast<unsigned char>(value & 0x7F), static_cast<unsigned char>((value >> 7) & 0x7F)};
+    uint8_t cmd[4] = {0x84, channel, static_cast<uint8_t>(value & 0x7F), static_cast<uint8_t>((value >> 7) & 0x7F)};
     return writeBytes(cmd, sizeof(cmd));
   }
   else
@@ -67,22 +67,22 @@ bool Maestro::set_pwm(unsigned char channel, unsigned short value)
   }
 }
 
-// Get the servo / ESC PWM signal, value is in microseconds, return true if successful
-bool Maestro::get_pwm(unsigned char channel, unsigned short& value)
+// Get the value at a particular channel
+bool Maestro::getValue(uint8_t channel, uint16_t& value)
 {
   if (ready())
   {
-    unsigned char cmd[2] = {0x90, channel};
+    uint8_t cmd[2] = {0x90, channel};
     if (!writeBytes(cmd, sizeof(cmd)))
     {
       return false;
     }
-    unsigned char response[2] = {0x00, 0x00};
+    uint8_t response[2] = {0x00, 0x00};
     if (!readBytes(response, sizeof(response)))
     {
       return false;
     }
-    value = response[0] + 256 * response[1];
+    value = response[0] + static_cast<uint16_t>(256 * response[1]);
     return true;    
   }
   else
@@ -91,11 +91,24 @@ bool Maestro::get_pwm(unsigned char channel, unsigned short& value)
   }
 }
 
-// Get the value of an analog pin, 0-5.0V
-bool Maestro::get_analog(unsigned char channel, float& value)
+// Get the servo / ESC PWM signal, value is in microseconds, return true if successful
+bool Maestro::getPWM(uint8_t channel, uint16_t& value)
 {
-  unsigned short temp;
-  if (!get_pwm(channel, temp))
+  if (!getValue(channel, value))
+  {
+    return false;
+  }
+
+  // Maestro pwm measurements are in 0.25us
+  value /= 4;
+  return true;
+}
+
+// Get the value of an analog pin, 0-5.0V
+bool Maestro::getAnalog(uint8_t channel, double& value)
+{
+  uint16_t temp;
+  if (!getValue(channel, temp))
   {
     return false;
   }
@@ -106,10 +119,10 @@ bool Maestro::get_analog(unsigned char channel, float& value)
 }
 
 // Get the value of a digital pin, true = high
-bool Maestro::get_digital(unsigned char channel, bool& value)
+bool Maestro::getDigital(uint8_t channel, bool& value)
 {
-  unsigned short temp;
-  if (!get_pwm(channel, temp))
+  uint16_t temp;
+  if (!getValue(channel, temp))
   {
     return false;
   }
@@ -120,29 +133,15 @@ bool Maestro::get_digital(unsigned char channel, bool& value)
 }
 
 // Write bytes to the serial port, return true if successful
-bool Maestro::writeBytes(const unsigned char* bytes, size_t size)
+bool Maestro::writeBytes(const uint8_t* bytes, size_t size)
 {
-  if (ready())
-  {
-    return write(fd_, bytes, size) == size;
-  }
-  else
-  {
-    return false;
-  }
+  return ready() && write(fd_, bytes, size) == size;
 }
 
 // Read bytes from the serial port, return true if successful
-bool Maestro::readBytes(unsigned char* bytes, size_t size)
+bool Maestro::readBytes(uint8_t* bytes, size_t size)
 {
-  if (ready())
-  {
-    return read(fd_, bytes, size) == size;
-  }
-  else
-  {
-    return false;
-  }  
+  return ready() && read(fd_, bytes, size) == size;
 }
 
 } // namespace maestro

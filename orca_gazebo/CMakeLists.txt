@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(orca_gazebo)
 
-# Load catkin and all dependencies required for this package
+## Find catkin and everything we need in ROS
 find_package(catkin REQUIRED COMPONENTS 
   gazebo_ros
   orca_msgs
@@ -12,7 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
 # Depend on system install of Gazebo
 find_package(gazebo REQUIRED)
 
-## Declare downstream dependencies
+## Declare a catkin package and export dependencies
 catkin_package(
   CATKIN_DEPENDS 
     gazebo_ros
@@ -21,8 +21,12 @@ catkin_package(
     rospy
 )
 
-link_directories(${GAZEBO_LIBRARY_DIRS})
+
+## Set up include directories
 include_directories(${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})
+
+## Set up link directories
+link_directories(${GAZEBO_LIBRARY_DIRS})
 
 ## Require C++14
 add_compile_options(-std=c++14)

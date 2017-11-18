@@ -1,6 +1,7 @@
 #ifndef ORCA_DRIVER_H
 #define ORCA_DRIVER_H
 
+#include <string>
 #include <vector>
 #include <ros/ros.h>
 #include "orca_driver/maestro.h"
@@ -10,17 +11,6 @@
 #include "orca_msgs/Lights.h"
 #include "orca_msgs/Thrusters.h"
 
-template<class T>
-constexpr const T clamp(const T v, const T min, const T max)
-{
-  return v > max ? max : (v < min ? min : v);
-}
-  
-constexpr const int servo_pulse_width(const float v, const float v_min, const float v_max, const unsigned int pwm_min, const unsigned int pwm_max)
-{
-  return clamp(1100 + static_cast<unsigned int>(800.0 / (v_max - v_min) * (v - v_min)), pwm_min, pwm_max);
-}
-
 namespace orca_driver {
 
 // OrcaDriver provides the interface between the Orca hardware and ROS.
@@ -29,7 +19,21 @@ class OrcaDriver
 {
 private:
   ros::NodeHandle &nh_;
+
+  // Parameters
+  int num_thrusters_;
   std::vector<int> thruster_channels_;
+  double thruster_limit_;
+  int lights_channel_;
+  int tilt_channel_;
+  int voltage_channel_;
+  int leak_channel_;
+  int spin_rate_;
+  std::string maestro_port_;
+  double voltage_multiplier_;
+  double voltage_min_;
+
+  // State
   maestro::Maestro maestro_;
   orca_msgs::Battery battery_msg_;
   orca_msgs::Leak leak_msg_;
@@ -37,7 +41,7 @@ private:
   // Subscriptions
   ros::Subscriber camera_tilt_sub_;
   ros::Subscriber lights_sub_;
-  ros::Subscriber thruster_sub_;
+  ros::Subscriber thrusters_sub_;
   
   // Callbacks
   void cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg);

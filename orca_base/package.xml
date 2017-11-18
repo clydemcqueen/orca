@@ -17,7 +17,6 @@
 
   <depend>orca_msgs</depend>
   <depend>roscpp</depend>
-  <depend>rospy</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>tf</depend>

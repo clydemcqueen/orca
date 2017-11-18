@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package format="2">
 
-  <name>orca_description</name>
+  <name>orca_topside</name>
   <version>0.0.0</version>
-  <description>Orca description files</description>
+  <description>Orca topside files</description>
 
   <maintainer email="clyde@mcqueen.net">Clyde McQueen</maintainer>
   <license>BSD</license>

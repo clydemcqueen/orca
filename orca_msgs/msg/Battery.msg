@@ -1,2 +1,2 @@
 # Battery voltage
-float32 voltage
+float64 voltage

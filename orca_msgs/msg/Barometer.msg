@@ -1,8 +1,8 @@
-# Pressure in mbar
-float32 pressure
+# Pressure in Pascals
+float64 pressure
 
 # Temperature in Celsius
-float32 temperature
+float64 temperature
 
 # Seawater depth in meters
-float32 depth
+float64 depth

@@ -1,68 +1,44 @@
 #include <std_msgs/Bool.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "orca_base/orca_base.h"
 #include "orca_msgs/Camera.h"
 #include "orca_msgs/Lights.h"
-#include "orca_msgs/Thruster.h"
-
-// TODO move defines to yaml
-
-// Joy message axes:
-#define JOY_AXIS_YAW            0   // Left stick left/right; 1.0 is left and -1.0 is right
-#define JOY_AXIS_FORWARD        1   // Left stick up/down; 1.0 is forward and -1.0 is backward
-#define JOY_AXIS_STRAFE         3   // Right stick left/right; 1.0 is left and -1.0 is right
-#define JOY_AXIS_VERTICAL       4   // Right stick up/down; 1.0 is ascend and -1.0 is descend
-#define JOY_AXIS_YAW_TRIM       6   // Trim left/right; acts like 2 buttons; 1.0 for left and -1.0 for right
-#define JOY_AXIS_VERTICAL_TRIM  7   // Trim up/down; acts like 2 buttons; 1.0 for up and -1.0 for down
-
-// Unused axes:
-// 2 Left trigger; starts from 1.0 and moves to -1.0
-// 5 Right trigger; starts from 1.0 and moves to -1.0
-
-// Joy message buttons:
-#define JOY_BUTTON_DISARM       6   // View
-#define JOY_BUTTON_ARM          7   // Menu
-#define JOY_BUTTON_MANUAL       0   // A
-#define JOY_BUTTON_STABILIZE    2   // X
-#define JOY_BUTTON_DEPTH_HOLD   3   // Y
-#define JOY_BUTTON_SURFACE      1   // B
-#define JOY_CAMERA_TILT_DOWN    4   // Left bumper
-#define JOY_CAMERA_TILT_UP      5   // Right bumper
-#define JOY_LIGHTS_BRIGHT       9   // Left stick
-#define JOY_LIGHTS_DIM          10  // Right stick
-
-// Unused buttons:
-// 8 Logo
+#include "orca_msgs/Thrusters.h"
 
 // Limits
-#define THRUSTER_MIN -1.0
-#define THRUSTER_MAX  1.0
-#define TILT_MIN     -45
-#define TILT_MAX      45
-#define LIGHTS_MIN    0.0
-#define LIGHTS_MAX    1.0
+// TODO move to shared .h file
+// TODO clamp param inputs to these limits
+constexpr double THRUSTER_MIN = -1.0;
+constexpr double THRUSTER_MAX = 1.0;
+constexpr int TILT_MIN = -45;
+constexpr int TILT_MAX = 45;
+constexpr int LIGHTS_MIN = 0;
+constexpr int LIGHTS_MAX = 100;
 
-// Trim increments
-#define PI          3.14159
-#define INC_YAW     PI/36
-#define INC_DEPTH   0.1
-#define INC_TILT    5
-#define INC_LIGHTS  0.2
+// Message publish rate in Hz
+constexpr int SPIN_RATE = 50;
 
-// Don't respond to tiny joystick movements
-#define INPUT_DEAD_BAND 0.05
+template<class T>
+constexpr const T dead_band(const T v, const T d)
+{
+  return v < d && v > -d ? 0 : v;
+}
 
-// Don't publish tiny thruster efforts
-#define EFFORT_DEAD_BAND 0.01
-
-// Publish messages at 100Hz
-#define SPIN_RATE 100
+template<class T>
+constexpr const T clamp(const T v, const T min, const T max)
+{
+  return v > max ? max : (v < min ? min : v);
+}
 
 namespace orca_base {
 
-OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
+OrcaBase::OrcaBase(ros::NodeHandle &nh, tf2_ros::TransformListener &tf):
   nh_{nh},
   tf_{tf},
   mode_{Mode::disarmed},
+  imu_ready_{false},
+  barometer_ready_{false},
   forward_effort_{0},
   yaw_effort_{0},
   strafe_effort_{0},
@@ -72,15 +48,54 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
   lights_{0},
   lights_trim_button_previous_{false}
 {
+  nh_.param("joy_axis_yaw", joy_axis_yaw_, 0);                      // Left stick left/right; 1.0 is left and -1.0 is right
+  nh_.param("joy_axis_forward", joy_axis_forward_, 1);              // Left stick up/down; 1.0 is forward and -1.0 is backward
+  nh_.param("joy_axis_strafe", joy_axis_strafe_, 3);                // Right stick left/right; 1.0 is left and -1.0 is right
+  nh_.param("joy_axis_vertical", joy_axis_vertical_, 4);            // Right stick up/down; 1.0 is ascend and -1.0 is descend
+  nh_.param("joy_axis_yaw_trim", joy_axis_yaw_trim_, 6);            // Trim left/right; acts like 2 buttons; 1.0 for left and -1.0 for right
+  nh_.param("joy_axis_vertical_trim", joy_axis_vertical_trim_, 7);  // Trim up/down; acts like 2 buttons; 1.0 for up and -1.0 for down
+
+  nh_.param("joy_button_disarm", joy_button_disarm_, 6);            // View
+  nh_.param("joy_button_arm", joy_button_arm_, 7);                  // Menu
+  nh_.param("joy_button_manual", joy_button_manual_, 0);            // A
+  nh_.param("joy_button_stabilize", joy_button_stabilize_, 2);      // X
+  nh_.param("joy_button_depth_hold", joy_button_depth_hold_, 3);    // Y
+  nh_.param("joy_button_surface", joy_button_surface_, 1);          // B
+  nh_.param("joy_button_tilt_down", joy_button_tilt_down_, 4);      // Left bumper
+  nh_.param("joy_button_tilt_up", joy_button_tilt_up_, 5);          // Right bumper
+  nh_.param("joy_button_bright", joy_button_bright_, 9);            // Left stick
+  nh_.param("joy_button_dim", joy_button_dim_, 10);                 // Right stick
+
+  nh_.param("inc_yaw", inc_yaw_, M_PI/36);
+  nh_.param("inc_depth", inc_depth_, 0.1);
+  nh_.param("inc_tilt", inc_tilt_, 5);
+  nh_.param("inc_lights", inc_lights_, 20);
+  nh_.param("input_dead_band", input_dead_band_, 0.05f);            // Don't respond to tiny joystick movements
+  nh_.param("effort_dead_band", effort_dead_band_, 0.01);           // Don't publish tiny thruster efforts
+
+  // TODO simulate a rotated imu and remove this hack
+  nh_.param("simulation", simulation_, true);
+  if (simulation_)
+  {
+    imu_rotation_ = tf2::Quaternion::getIdentity();
+  }
+  else
+  {
+    // TODO listen for this transform
+    tf2::Quaternion imu_orientation;
+    imu_orientation.setRPY(-M_PI/2, -M_PI/2, 0);
+    imu_rotation_ =  imu_orientation.inverse();
+  }
+
   // Set up all subscriptions
   baro_sub_ = nh_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
-  imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu", 10, &OrcaBase::imuCallback, this);
+  imu_sub_ = nh_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   yaw_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/yaw_control_effort", 10, &OrcaBase::yawControlEffortCallback, this);
   depth_control_effort_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
 
   // Advertise all topics that we'll publish on
-  thruster_pub_ = nh_.advertise<orca_msgs::Thruster>("/thrusters", 1);
+  thrusters_pub_ = nh_.advertise<orca_msgs::Thrusters>("/thrusters", 1);
   camera_tilt_pub_ = nh_.advertise<orca_msgs::Camera>("/camera_tilt", 1);
   lights_pub_ = nh_.advertise<orca_msgs::Lights>("/lights", 1);
   yaw_pid_enable_pub_ = nh_.advertise<std_msgs::Bool>("/yaw_pid_enable", 1);
@@ -95,18 +110,30 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf):
 void OrcaBase::baroCallback(const orca_msgs::Barometer::ConstPtr& baro_msg)
 {
   depth_state_ = baro_msg->depth;
+  if (!barometer_ready_)
+  {
+    barometer_ready_ = true;
+    ROS_INFO("Barometer ready, depth %g", depth_state_);
+  }
 }
 
 // New imu reading
 void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 {
-  tf::Quaternion q;
-  double roll, pitch, yaw;
+  // IMU orientation, rotated to account for the placement in the ROV
+  tf2::Quaternion imu_orientation;
+  tf2::fromMsg(msg->orientation, imu_orientation);
+  base_orientation_ = imu_orientation * imu_rotation_;
 
-  tf::quaternionMsgToTF(msg->orientation, q);
-  tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
+  // Pull out the yaw for convenience
+  double roll, pitch;
+  tf2::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
 
-  yaw_state_ = yaw;
+  if (!imu_ready_)
+  {
+    imu_ready_ = true;
+    ROS_INFO("IMU ready, roll %4.2f pitch %4.2f yaw %4.2f", roll, pitch, yaw_state_);
+  }
 }
 
 // Result of yaw pid controller
@@ -114,7 +141,7 @@ void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
   if (mode_ == Mode::stabilize || mode_ == Mode::depth_hold)
   {
-    yaw_effort_ = dead_band(msg->data, EFFORT_DEAD_BAND);
+    yaw_effort_ = dead_band(msg->data, effort_dead_band_);
   }
 }
 
@@ -123,22 +150,28 @@ void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg
 {
   if (mode_ == Mode::depth_hold)
   {
-    vertical_effort_ = dead_band(msg->data, EFFORT_DEAD_BAND);  
+    vertical_effort_ = dead_band(-msg->data, effort_dead_band_);
   }
 }
 
 void OrcaBase::publishYawSetpoint()
 {
-  std_msgs::Float64 setpoint;
-  setpoint.data = yaw_setpoint_;
-  yaw_setpoint_pub_.publish(setpoint);
+  if (imu_ready_)
+  {
+      std_msgs::Float64 setpoint;
+      setpoint.data = yaw_setpoint_;
+      yaw_setpoint_pub_.publish(setpoint);  
+  }
 }
 
 void OrcaBase::publishDepthSetpoint()
 {
-  std_msgs::Float64 setpoint;
-  setpoint.data = depth_setpoint_;
-  depth_setpoint_pub_.publish(setpoint);
+  if (barometer_ready_)
+  {
+    std_msgs::Float64 setpoint;
+    setpoint.data = depth_setpoint_;
+    depth_setpoint_pub_.publish(setpoint);  
+  }
 }
 
 void OrcaBase::publishCameraTilt()
@@ -155,10 +188,29 @@ void OrcaBase::publishLights()
   lights_pub_.publish(msg);
 }
 
+void OrcaBase::publishOdom()
+{
+  if (imu_ready_ && barometer_ready_)
+  {
+    // Publish a transform from base_link to odom with rpy (from the imu) and z (from the barometer)
+    geometry_msgs::TransformStamped odom_tf;
+    odom_tf.header.stamp = ros::Time::now();
+    odom_tf.header.frame_id = "odom"; // TODO param
+    odom_tf.child_frame_id = "base_link"; // TODO param
+    odom_tf.transform.translation.x = 0;
+    odom_tf.transform.translation.y = 0;
+    odom_tf.transform.translation.z = -depth_state_;
+    odom_tf.transform.rotation = tf2::toMsg(base_orientation_);
+    tf_broadcaster_.sendTransform(odom_tf);
+
+    // TODO estimate x and y from thruster and imu data
+    // TODO publish an odometry message with both pose and velocity
+  }
+}
+
 // Change operation mode
 void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
 {
-  // TODO mutex critical state
   mode_ = mode;  
 
   if (mode == Mode::depth_hold)
@@ -214,13 +266,16 @@ void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
 // New input from the gamepad
 void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 {
+  constexpr double depth_hold_min = 0.05; // Hover just below the surface of the water
+  constexpr double depth_hold_max = 50;   // Margin of safety
+
   // Arm/disarm
-  if (joy_msg->buttons[JOY_BUTTON_DISARM])
+  if (joy_msg->buttons[joy_button_disarm_])
   {
     ROS_INFO("Disarmed");
     setMode(Mode::disarmed);
   }
-  else if (joy_msg->buttons[JOY_BUTTON_ARM])
+  else if (joy_msg->buttons[joy_button_arm_])
   {
     ROS_INFO("Armed, manual");
     setMode(Mode::manual);
@@ -234,102 +289,123 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 
   // Mode
-  if (joy_msg->buttons[JOY_BUTTON_MANUAL])
+  if (joy_msg->buttons[joy_button_manual_])
   {
     ROS_INFO("Manual");
     setMode(Mode::manual);
   }
-  else if (joy_msg->buttons[JOY_BUTTON_STABILIZE])
+  else if (joy_msg->buttons[joy_button_stabilize_])
   {
-    ROS_INFO("Stabilize");
-    setMode(Mode::stabilize);
+    if (imu_ready_)
+    {
+      ROS_INFO("Stabilize");
+      setMode(Mode::stabilize);
+    }
+    else
+    {
+      ROS_ERROR("IMU not ready, can't stabilize");
+    }
   }
-  else if (joy_msg->buttons[JOY_BUTTON_DEPTH_HOLD])
+  else if (joy_msg->buttons[joy_button_depth_hold_])
   {
-    ROS_INFO("Depth hold");
-    setMode(Mode::depth_hold, depth_state_);
+    if (imu_ready_ && barometer_ready_)
+    {
+      ROS_INFO("Depth hold");
+      setMode(Mode::depth_hold, depth_state_);  
+    }
+    else
+    {
+      ROS_ERROR("Barometer and/or IMU not ready, can't hold depth");
+    }
   }
-  else if (joy_msg->buttons[JOY_BUTTON_SURFACE])
+  else if (joy_msg->buttons[joy_button_surface_])
   {
-    ROS_INFO("Surface");
-    setMode(Mode::depth_hold, 10.0); // TODO create notion of 'underwater' in gazebo, and set target depth to 0
+    if (imu_ready_ && barometer_ready_)
+    {
+      ROS_INFO("Surface");
+      setMode(Mode::depth_hold, depth_hold_min);
+      }
+    else
+    {
+      ROS_ERROR("Barometer and/or IMU not ready, can't automatically surface");
+    }
   }
 
   // Yaw trim
-  if (joy_msg->axes[JOY_AXIS_YAW_TRIM] != 0.0 && !yaw_trim_button_previous_)
+  if (joy_msg->axes[joy_axis_yaw_trim_] != 0.0 && !yaw_trim_button_previous_)
   {
     // Rising edge
     if ((mode_ == Mode::stabilize || mode_ == Mode::depth_hold))
     {
-      yaw_setpoint_ = joy_msg->axes[JOY_AXIS_YAW_TRIM] > 0.0 ? yaw_setpoint_ + INC_YAW : yaw_setpoint_ - INC_YAW;
+      yaw_setpoint_ = joy_msg->axes[joy_axis_yaw_trim_] > 0.0 ? yaw_setpoint_ + inc_yaw_ : yaw_setpoint_ - inc_yaw_;
       publishYawSetpoint();
     }
 
     yaw_trim_button_previous_ = true;
   }
-  else if (joy_msg->axes[JOY_AXIS_YAW_TRIM] == 0.0 && yaw_trim_button_previous_)
+  else if (joy_msg->axes[joy_axis_yaw_trim_] == 0.0 && yaw_trim_button_previous_)
   {
     // Falling edge
     yaw_trim_button_previous_ = false;
   }
 
   // Depth trim
-  if (joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] != 0.0 && !depth_trim_button_previous_)
+  if (joy_msg->axes[joy_axis_vertical_trim_] != 0.0 && !depth_trim_button_previous_)
   {
     // Rising edge
     if (mode_ == Mode::depth_hold)
     {
-      // TODO clamp this to the surface
-      depth_setpoint_ = joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] > 0 ? depth_setpoint_ + INC_DEPTH : depth_setpoint_ - INC_DEPTH;
+      depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
+        depth_hold_min, depth_hold_max);
       publishDepthSetpoint();
     }
 
     depth_trim_button_previous_ = true;
   }
-  else if (joy_msg->axes[JOY_AXIS_VERTICAL_TRIM] == 0.0 && depth_trim_button_previous_)
+  else if (joy_msg->axes[joy_axis_vertical_trim_] == 0.0 && depth_trim_button_previous_)
   {
     // Falling edge
     depth_trim_button_previous_ = false;
   }
 
   // Camera tilt
-  if ((joy_msg->buttons[JOY_CAMERA_TILT_UP] || joy_msg->buttons[JOY_CAMERA_TILT_DOWN]) && !tilt_trim_button_previous_)
+  if ((joy_msg->buttons[joy_button_tilt_up_] || joy_msg->buttons[joy_button_tilt_down_]) && !tilt_trim_button_previous_)
   {
     // Rising edge
-    tilt_ = clamp(joy_msg->buttons[JOY_CAMERA_TILT_UP] ? tilt_ + INC_TILT : tilt_ - INC_TILT, TILT_MIN, TILT_MAX);
+    tilt_ = clamp(tilt_ + joy_msg->buttons[joy_button_tilt_up_] ? inc_tilt_ : -inc_tilt_, TILT_MIN, TILT_MAX);
     publishCameraTilt();
     tilt_trim_button_previous_ = true;
   }
-  else if (!joy_msg->buttons[JOY_CAMERA_TILT_UP] && !joy_msg->buttons[JOY_CAMERA_TILT_DOWN] && tilt_trim_button_previous_)
+  else if (!joy_msg->buttons[joy_button_tilt_up_] && !joy_msg->buttons[joy_button_tilt_down_] && tilt_trim_button_previous_)
   {
     // Falling edge
     tilt_trim_button_previous_ = false;
   }
 
   // Lights
-  if ((joy_msg->buttons[JOY_LIGHTS_BRIGHT] || joy_msg->buttons[JOY_LIGHTS_DIM]) && !lights_trim_button_previous_)
+  if ((joy_msg->buttons[joy_button_bright_] || joy_msg->buttons[joy_button_dim_]) && !lights_trim_button_previous_)
   {
   // Rising edge
-    lights_ = clamp(joy_msg->buttons[JOY_LIGHTS_BRIGHT] ? lights_ + INC_LIGHTS : lights_ - INC_LIGHTS, LIGHTS_MIN, LIGHTS_MAX);
+    lights_ = clamp(lights_ + joy_msg->buttons[joy_button_bright_] ? inc_lights_ : -inc_lights_, LIGHTS_MIN, LIGHTS_MAX);
     publishLights();
     lights_trim_button_previous_ = true;
   }
-  else if (!joy_msg->buttons[JOY_LIGHTS_BRIGHT] && !joy_msg->buttons[JOY_LIGHTS_DIM] && lights_trim_button_previous_)
+  else if (!joy_msg->buttons[joy_button_bright_] && !joy_msg->buttons[joy_button_dim_] && lights_trim_button_previous_)
   {
     // Falling edge
     lights_trim_button_previous_ = false;      
   }
 
   // Thrusters
-  forward_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_FORWARD], INPUT_DEAD_BAND);
+  forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_);
   if (mode_ == Mode::manual)
   {
-    yaw_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_YAW], INPUT_DEAD_BAND);
+    yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_);
   }
-  strafe_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_STRAFE], INPUT_DEAD_BAND);
+  strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_);
   if (mode_ == Mode::manual || mode_ == Mode::stabilize)
   {
-    vertical_effort_ = dead_band((double)joy_msg->axes[JOY_AXIS_VERTICAL], INPUT_DEAD_BAND);
+    vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_);
   }
 }
 
@@ -355,16 +431,17 @@ void OrcaBase::spinOnce(const ros::TimerEvent &event)
   // Set thruster efforts. Note that strafe and yaw areTHRUSTER_MAX for left, THRUSTER_MIN for right.
   // Order must match the order of the <thruster> tags in the URDF.
   // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
-  orca_msgs::Thruster thruster_msg;
-  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thruster_pub_.publish(thruster_msg);
+  orca_msgs::Thrusters thrusters_msg;
+  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_pub_.publish(thrusters_msg);
 
-  // TODO publish odometry
+  // Publish odometry
+  publishOdom();
 }
 
 } // namespace orca_base
@@ -373,7 +450,8 @@ int main(int argc, char **argv)
 {
   ros::init(argc, argv, "orca_base");
   ros::NodeHandle nh{"~"};
-  tf::TransformListener tf{nh};
+  tf2_ros::Buffer tf_buffer;
+  tf2_ros::TransformListener tf{tf_buffer};
   orca_base::OrcaBase orca_base{nh, tf};
 
   ros::Timer t = nh.createTimer(ros::Duration(1.0 / SPIN_RATE), &orca_base::OrcaBase::spinOnce, &orca_base);

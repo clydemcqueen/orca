@@ -5,20 +5,10 @@
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Joy.h>
-#include <tf/transform_listener.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 #include "orca_msgs/Barometer.h"
-
-template<class T>
-constexpr const T dead_band(const T v, const T d)
-{
-  return v < d && v > -d ? 0 : v;
-}
-
-template<class T>
-constexpr const T clamp(const T v, const T min, const T max)
-{
-  return v > max ? max : (v < min ? min : v);
-}
 
 namespace orca_base {
 
@@ -35,9 +25,39 @@ class OrcaBase
 {
 private:
   ros::NodeHandle &nh_;
-  tf::TransformListener &tf_;
+  tf2_ros::TransformListener &tf_;
 
+  // Parameters from the parameter server
+  int joy_axis_yaw_;
+  int joy_axis_forward_;
+  int joy_axis_strafe_;
+  int joy_axis_vertical_;
+  int joy_axis_yaw_trim_;
+  int joy_axis_vertical_trim_;
+  int joy_button_disarm_;
+  int joy_button_arm_;
+  int joy_button_manual_;
+  int joy_button_stabilize_;
+  int joy_button_depth_hold_;
+  int joy_button_surface_;
+  int joy_button_tilt_down_;
+  int joy_button_tilt_up_;
+  int joy_button_bright_;
+  int joy_button_dim_;
+  double inc_yaw_;
+  double inc_depth_;
+  int inc_tilt_;
+  int inc_lights_;
+  float input_dead_band_;
+  double effort_dead_band_;
+  bool simulation_;
+  tf2::Quaternion imu_rotation_;
+
+  // General state
   Mode mode_;
+  bool imu_ready_;                    // True if we've received at least one imu message
+  bool barometer_ready_;              // True if we've received at least one barometer message
+  tf2::Quaternion base_orientation_;  // Current orientation
 
   // Yaw pid control state
   double yaw_state_;
@@ -60,9 +80,9 @@ private:
   bool tilt_trim_button_previous_;
 
   // Lights
-  double lights_;
+  int lights_;
   bool lights_trim_button_previous_;
-  
+
   // Subscriptions
   ros::Subscriber baro_sub_;
   ros::Subscriber imu_sub_;
@@ -78,7 +98,7 @@ private:
   void joyCallback(const sensor_msgs::Joy::ConstPtr& msg);
   
   // Publications
-  ros::Publisher thruster_pub_;
+  ros::Publisher thrusters_pub_;
   ros::Publisher yaw_pid_enable_pub_;
   ros::Publisher yaw_state_pub_;
   ros::Publisher yaw_setpoint_pub_;
@@ -87,16 +107,18 @@ private:
   ros::Publisher depth_setpoint_pub_;
   ros::Publisher camera_tilt_pub_;
   ros::Publisher lights_pub_;
+  tf2_ros::TransformBroadcaster tf_broadcaster_;
   
   // Helpers
   void publishYawSetpoint();
   void publishDepthSetpoint();
   void publishCameraTilt();
   void publishLights();
+  void publishOdom();
   void setMode(Mode mode, double depth_setpoint);
   
 public:
-  explicit OrcaBase(ros::NodeHandle &nh, tf::TransformListener &tf);
+  explicit OrcaBase(ros::NodeHandle &nh, tf2_ros::TransformListener &tf);
   ~OrcaBase() {}; // Suppress default copy and move constructors
 
   void spinOnce(const ros::TimerEvent &event);

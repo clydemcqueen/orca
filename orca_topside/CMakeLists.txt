@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(orca_description)
+project(orca_topside)
 
-## Find catkin
+## Find catkin and everything we need in ROS
 find_package(catkin REQUIRED)
 
 ## Declare a catkin package

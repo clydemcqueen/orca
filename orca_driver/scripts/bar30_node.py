@@ -27,7 +27,7 @@ def run():
   while not rospy.is_shutdown():
     if sensor.read():
       msg = Barometer()
-      msg.pressure = sensor.pressure()          # mbar
+      msg.pressure = sensor.pressure() * 100.0  # Pascals
       msg.temperature = sensor.temperature()    # Celsius
       msg.depth = sensor.depth()                # meters
       pub.publish(msg)
@@ -36,7 +36,7 @@ def run():
     rate.sleep()
 
 if __name__ == '__main__':
-    try:
-        run()
-    except rospy.ROSInterruptException:
-        pass
+  try:
+    run()
+  except rospy.ROSInterruptException:
+    pass

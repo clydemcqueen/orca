@@ -9,12 +9,13 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
-## Declare downstream dependencies
+## Declare a catkin package and export dependencies
 catkin_package(
   CATKIN_DEPENDS
     orca_msgs
     roscpp
     rospy
+    std_msgs
 )
 
 ## Set up include directories

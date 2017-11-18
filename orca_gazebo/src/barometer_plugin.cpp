@@ -7,22 +7,24 @@
 namespace gazebo
 {
 
-// A very simple barometer sensor plugin. Usage:
+// A very simple barometer sensor plugin for underwater robotics. Usage:
 //
 //    <gazebo reference="base_link">
 //      <sensor name="barometer_sensor" type="altimeter">
 //        <update_rate>60</update_rate>
 //        <plugin name="BarometerPlugin" filename="libBarometerPlugin.so">
 //          <ros_topic>/barometer</ros_topic>
+//          <surface>9</surface>
+//          <fluid_density>1029</fluid_density>
 //        </plugin>
 //      </sensor>
 //    </gazebo>
 //
 // We publish Barometer messages on <ros_topic>.
+// The surface of the water is <surface> meters above the ground plane.
+// The fluid density is <fluid_density> kg/m^3. Use 997 for freshwater and 1029 for seawater.
 // 
 // TODO: evaluate the noise model
-// TODO: how do we support the idea of a water surface?
-// TODO: also publish temperature and pressure
 
 class BarometerPlugin : public SensorPlugin
 {
@@ -38,6 +40,12 @@ private:
 
   // ROS publisher
   ros::Publisher baro_pub_;
+
+  // Surface height
+  double surface_;
+
+  // Fluid density
+  double fluid_density_;
   
 public:
 
@@ -65,6 +73,23 @@ public:
     // Set up ROS publisher
     baro_pub_ = nh_->advertise<orca_msgs::Barometer>(ros_topic, 1);
 
+    // Get surface height
+    surface_ = 9;
+    if (sdf->HasElement("surface"))
+    {
+      surface_ = sdf->GetElement("surface")->Get<double>();
+    }
+    ROS_INFO("Water surface is %g meters above the ground plane", surface_);
+
+    // Get water density
+    constexpr double seawater_density = 1029;
+    fluid_density_ = seawater_density;
+    if (sdf->HasElement("fluid_density"))
+    {
+      fluid_density_ = sdf->GetElement("fluid_density")->Get<double>();
+    }
+    ROS_INFO("Fluid density is %g kg/m^3", fluid_density_);
+
     // Get the parent sensor
     altimeter_ = std::dynamic_pointer_cast<sensors::AltimeterSensor>(sensor);
 
@@ -78,8 +103,24 @@ public:
   // The update event is broadcast at the sensor frequency, roughly 60Hz
   void OnUpdate()
   {
+    constexpr double atmospheric_pressure = 101325;   // Pascals
+    constexpr double gravity = 9.80665;               // m/s^2
+
     orca_msgs::Barometer baro_msg;
-    baro_msg.depth = altimeter_->Altitude();
+    double depth = surface_ - altimeter_->Altitude();
+
+    if (depth >= 0.0)
+    {
+      baro_msg.depth = depth;                                                       // m
+      baro_msg.pressure = fluid_density_ * gravity * depth + atmospheric_pressure;  // Pascals
+      baro_msg.temperature = 10;                                                    // Celsius
+    }
+    else
+    {
+      baro_msg.depth = 0;
+      baro_msg.pressure = atmospheric_pressure;
+      baro_msg.temperature = 20;
+    }
     baro_pub_.publish(baro_msg);
   }
 };

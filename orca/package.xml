@@ -20,6 +20,7 @@
   <exec_depend>orca_driver</exec_depend>
   <exec_depend>orca_gazebo</exec_depend>
   <exec_depend>orca_msgs</exec_depend>
+  <exec_depend>orca_topside</exec_depend>
 
   <export>
     <metapackage/>

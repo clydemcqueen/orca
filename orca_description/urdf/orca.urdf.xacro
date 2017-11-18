@@ -1,5 +1,8 @@
 <?xml version="1.0"?>
 
+<!-- Coordinates are: x forward, y left, z up; rotation is: roll right, pitch forward, yaw left -->
+<!-- See http://www.ros.org/reps/rep-0103.html for details -->
+
 <robot name="orca" xmlns:xacro="http://ros.org/wiki/xacro">
 
   <!-- BlueROV2 specs -->
@@ -9,6 +12,9 @@
   <xacro:property name="LENGTH" value="0.457"/>
   <xacro:property name="WIDTH" value="0.338"/>
   <xacro:property name="HEIGHT" value="0.254"/>
+  <xacro:property name="THRUSTER_X" value="0.15"/>
+  <xacro:property name="THRUSTER_Y" value="0.1"/>
+  <xacro:property name="VERT_THRUSTER_Y" value="0.105"/>
 
   <!-- Physics properties -->
   <xacro:property name="FLUID_DENSITY" value="1000.0"/>
@@ -65,7 +71,7 @@
 
     <visual>
       <geometry>
-        <box size="${WIDTH} ${LENGTH} 0.01"/> <!--TODO eliminate visuals? -->
+        <box size="${LENGTH} ${WIDTH} 0.01"/>
       </geometry>
       <material name="gray">
         <color rgba="0.5 0.5 0.5 0.5"/>
@@ -74,7 +80,7 @@
 
     <collision>
       <geometry>
-        <box size="${WIDTH} ${LENGTH} 0.01"/> <!-- TODO set collision geometry to entire bounding box? -->
+        <box size="${LENGTH} ${WIDTH} 0.01"/>
       </geometry>
     </collision>
 
@@ -82,29 +88,29 @@
 
   <!-- Attach thrusters to the base_link -->
   <xacro:t200 name="front_right">
-    <origin xyz="0.1 0.15 0" rpy="0 ${PI/2} ${PI*3/4}"/>
+    <origin xyz="${THRUSTER_X} ${-THRUSTER_Y} 0" rpy="0 ${PI/2} ${PI*1/4}"/>
   </xacro:t200>
   <xacro:t200 name="front_left">
-    <origin xyz="-0.1 0.15 0" rpy="0 ${PI/2} ${PI*1/4}"/>
+    <origin xyz="${THRUSTER_X} ${THRUSTER_Y} 0" rpy="0 ${PI/2} ${-PI*1/4}"/>
   </xacro:t200>
   <xacro:t200 name="rear_right">
-    <origin xyz="0.1 -0.15 0" rpy="0 ${PI/2} ${PI*5/4}"/>
+    <origin xyz="${-THRUSTER_X} ${-THRUSTER_Y} 0" rpy="0 ${PI/2} ${PI*3/4}"/>
   </xacro:t200>
   <xacro:t200 name="rear_left">
-    <origin xyz="-0.1 -0.15 0" rpy="0 ${PI/2} ${PI*7/4}"/>
+    <origin xyz="${-THRUSTER_X} ${THRUSTER_Y} 0" rpy="0 ${PI/2} ${-PI*3/4}"/>
   </xacro:t200>
   <xacro:t200 name="vertical_right">
-    <origin xyz="0.105 0 0" rpy="0 0 0"/>
+    <origin xyz="0 ${-VERT_THRUSTER_Y} 0" rpy="0 0 0"/>
   </xacro:t200>
   <xacro:t200 name="vertical_left">
-    <origin xyz="-0.105 0 0" rpy="0 0 0"/>
+    <origin xyz="0 ${VERT_THRUSTER_Y} 0" rpy="0 0 0"/>
   </xacro:t200>
 
   <!-- Electronics enclosure -->
-  <link name="enclosure">
+  <link name="enclosure_link">
 
     <inertial>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 ${PI/2} 0" xyz="0 0 0"/>
       <mass value="${ENCLOSURE_MASS}"/>
       <inertia
         ixx="1.0" ixy="0.0" ixz="0.0"
@@ -113,7 +119,7 @@
     </inertial>
 
     <visual>
-      <origin rpy="${PI/2} 0 0" xyz="0 0 0"/>
+      <origin rpy="0 ${PI/2} 0" xyz="0 0 0"/>
       <geometry>
         <cylinder length="0.32" radius="0.055"/>
       </geometry>
@@ -123,7 +129,7 @@
     </visual>
 
     <collision>
-      <origin rpy="${PI/2} 0 0" xyz="0 0 0"/>
+      <origin rpy="0 ${PI/2} 0" xyz="0 0 0"/>
       <geometry>
         <cylinder length="0.32" radius="0.055"/>
       </geometry>
@@ -131,11 +137,49 @@
 
   </link>
 
-  <!-- Attach electronics enclosure to base link -->
-  <joint name="base_link_to_enclosure" type="fixed">
+  <!-- Attach enclosure link to base link -->
+  <joint name="base_link_to_enclosure_link" type="fixed">
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <parent link="base_link"/>
-    <child link="enclosure"/>
+    <child link="enclosure_link"/>
+  </joint>
+
+  <!-- IMU -->
+  <link name="imu_link">
+
+    <inertial>
+      <origin rpy="${-PI/2} ${-PI/2} 0" xyz="0 0 0"/>
+      <mass value="0"/>
+      <inertia
+        ixx="1.0" ixy="0.0" ixz="0.0"
+        iyy="1.0" iyz="0.0"
+        izz="1.0"/>
+    </inertial>
+
+    <visual>
+      <origin rpy="${-PI/2} ${-PI/2} 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.03 0.005"/>
+      </geometry>
+      <material name="green">
+        <color rgba="0 0.5 0 0.5"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin rpy="${-PI/2} ${-PI/2} 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.03 0.005"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+  <!-- Attach imu link to base link -->
+  <joint name="base_link_to_imu_link" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin rpy="0 0 0" xyz="0.1 -0.025 0.06"/>
   </joint>
 
   <!--
@@ -177,27 +221,27 @@
       <ros_topic>/thrusters</ros_topic>
       <thruster name="front_right"> <!-- name attributes are ignored; the tag order must match the message array order -->
         <force>50</force> <!-- units are N, positive for ccw, negative for cw -->
-        <origin xyz="0.1 0.15 0" rpy="0 ${PI/2} ${PI*3/4}"/>
+        <origin xyz="${THRUSTER_X} ${-THRUSTER_Y} 0" rpy="0 ${PI/2} ${PI*1/4}"/>
       </thruster>
       <thruster name="front_left">
         <force>50</force>
-        <origin xyz="-0.1 0.15 0" rpy="0 ${PI/2} ${PI*1/4}"/>
+        <origin xyz="${THRUSTER_X} ${THRUSTER_Y} 0" rpy="0 ${PI/2} ${-PI*1/4}"/>
       </thruster>
       <thruster name="rear_right">
         <force>-50</force> <!-- cw -->
-        <origin xyz="0.1 -0.15 0" rpy="0 ${PI/2} ${PI*5/4}"/>
+        <origin xyz="${-THRUSTER_X} ${-THRUSTER_Y} 0" rpy="0 ${PI/2} ${PI*3/4}"/>
       </thruster>
       <thruster name="rear_left">
         <force>-50</force> <!-- cw -->
-        <origin xyz="-0.1 -0.15 0" rpy="0 ${PI/2} ${PI*7/4}"/>
+        <origin xyz="${-THRUSTER_X} ${THRUSTER_Y} 0" rpy="0 ${PI/2} ${-PI*3/4}"/>
       </thruster>
       <thruster name="vertical_right">
         <force>50</force>
-        <origin xyz="0.105 0 0" rpy="0 0 0"/>
+        <origin xyz="0 ${-VERT_THRUSTER_Y} 0" rpy="0 0 0"/>
       </thruster>
       <thruster name="vertical_left">
         <force>-50</force> <!-- cw -->
-        <origin xyz="-0.105 0 0" rpy="0 0 0"/>
+        <origin xyz="0 ${VERT_THRUSTER_Y} 0" rpy="0 0 0"/>
       </thruster>
     </plugin>
   </gazebo>
@@ -210,6 +254,8 @@
       <update_rate>60</update_rate>
       <plugin name="BarometerPlugin" filename="libBarometerPlugin.so">
         <ros_topic>/barometer</ros_topic>
+        <surface>9</surface>
+        <fluid_density>${FLUID_DENSITY}</fluid_density>
       </plugin>
     </sensor>
   </gazebo>
@@ -217,20 +263,20 @@
   <!--
     The GazeboRosImuSensor (provided by ROS, wraps a Gazebo IMU sensor) simulates an IMU sensor such as the Phidgets 1044.
   -->
-  <gazebo reference="base_link">
+  <gazebo reference="imu_link">
     <gravity>true</gravity>
     <sensor name="imu_sensor" type="imu">
       <update_rate>100</update_rate>
       <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
-        <topicName>imu</topicName>
-        <bodyName>base_link</bodyName>
+        <topicName>/imu/data</topicName>
+        <bodyName>imu_link</bodyName>
         <updateRateHZ>100.0</updateRateHZ>
-        <gaussianNoise>0.0</gaussianNoise> <!-- TODO -->
-        <xyzOffset>0 0 0</xyzOffset> <!-- TODO -->
-        <rpyOffset>0 0 0</rpyOffset> <!-- TODO -->
-        <frameName>base_link</frameName>
+        <gaussianNoise>0.0</gaussianNoise> <!-- TODO apply a noise model -->
+        <xyzOffset>0 0 0</xyzOffset>
+        <rpyOffset>0 0 0</rpyOffset> <!-- TODO simulate a rotated imu -->
+        <frameName>imu_link</frameName>
       </plugin>
-      <pose>0 0 0 0 0 0</pose> <!-- TODO -->
+      <pose>0 0 0 0 0 0</pose>
     </sensor>
   </gazebo>
 
