@@ -19,6 +19,7 @@ class OrcaDriver
 {
 private:
   ros::NodeHandle &nh_;
+  ros::NodeHandle &nh_priv_;
 
   // Parameters
   int num_thrusters_;
@@ -58,7 +59,7 @@ private:
   bool preDive();
 
 public:
-  explicit OrcaDriver(ros::NodeHandle &nh);
+  explicit OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv);
   ~OrcaDriver() {}; // Suppress default copy and move constructors
 
   bool run();

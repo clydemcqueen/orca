@@ -25,6 +25,7 @@ class OrcaBase
 {
 private:
   ros::NodeHandle &nh_;
+  ros::NodeHandle &nh_priv_;
   tf2_ros::TransformListener &tf_;
 
   // Parameters from the parameter server
@@ -118,7 +119,7 @@ private:
   void setMode(Mode mode, double depth_setpoint);
   
 public:
-  explicit OrcaBase(ros::NodeHandle &nh, tf2_ros::TransformListener &tf);
+  explicit OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf);
   ~OrcaBase() {}; // Suppress default copy and move constructors
 
   void spinOnce(const ros::TimerEvent &event);

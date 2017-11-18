@@ -29,10 +29,10 @@
     <param name="windup_limit" value="0.1" />
     <param name="max_loop_frequency" value="100.0" />
     <param name="min_loop_frequency" value="100.0" />
-    <remap from="pid_enable" to="/yaw_pid_enable" />
-    <remap from="state" to="/yaw_state" />
-    <remap from="setpoint" to="/yaw_setpoint" />
-    <remap from="control_effort" to="/yaw_control_effort" />
+    <remap from="pid_enable" to="/yaw_pid/pid_enable" />
+    <remap from="state" to="/yaw_pid/state" />
+    <remap from="setpoint" to="/yaw_pid/setpoint" />
+    <remap from="control_effort" to="/yaw_pid/control_effort" />
   </node>
 
   <!-- Launch the depth pid controller -->
@@ -46,10 +46,10 @@
     <param name="windup_limit" value="0.1" />
     <param name="max_loop_frequency" value="100.0" />
     <param name="min_loop_frequency" value="100.0" />
-    <remap from="pid_enable" to="/depth_pid_enable" />
-    <remap from="state" to="/depth_state" />
-    <remap from="setpoint" to="/depth_setpoint" />
-    <remap from="control_effort" to="/depth_control_effort" />
+    <remap from="pid_enable" to="/depth_pid/pid_enable" />
+    <remap from="state" to="/depth_pid/state" />
+    <remap from="setpoint" to="/depth_pid/setpoint" />
+    <remap from="control_effort" to="/depth_pid/control_effort" />
   </node>
 
 </launch>

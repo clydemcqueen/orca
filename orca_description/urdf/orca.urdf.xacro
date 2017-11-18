@@ -218,7 +218,7 @@
   -->
   <gazebo>
     <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so">
-      <ros_topic>/thrusters</ros_topic>
+      <ros_topic>/orca_base/thrusters</ros_topic>
       <thruster name="front_right"> <!-- name attributes are ignored; the tag order must match the message array order -->
         <force>50</force> <!-- units are N, positive for ccw, negative for cw -->
         <origin xyz="${THRUSTER_X} ${-THRUSTER_Y} 0" rpy="0 ${PI/2} ${PI*1/4}"/>
