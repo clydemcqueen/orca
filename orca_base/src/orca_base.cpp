@@ -373,7 +373,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if ((joy_msg->buttons[joy_button_tilt_up_] || joy_msg->buttons[joy_button_tilt_down_]) && !tilt_trim_button_previous_)
   {
     // Rising edge
-    tilt_ = clamp(tilt_ + joy_msg->buttons[joy_button_tilt_up_] ? inc_tilt_ : -inc_tilt_, TILT_MIN, TILT_MAX);
+    tilt_ = clamp(joy_msg->buttons[joy_button_tilt_up_] ? tilt_ + inc_tilt_ : tilt_ - inc_tilt_, TILT_MIN, TILT_MAX);
     publishCameraTilt();
     tilt_trim_button_previous_ = true;
   }
@@ -387,7 +387,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if ((joy_msg->buttons[joy_button_bright_] || joy_msg->buttons[joy_button_dim_]) && !lights_trim_button_previous_)
   {
   // Rising edge
-    lights_ = clamp(lights_ + joy_msg->buttons[joy_button_bright_] ? inc_lights_ : -inc_lights_, LIGHTS_MIN, LIGHTS_MAX);
+    lights_ = clamp(joy_msg->buttons[joy_button_bright_] ? lights_ + inc_lights_ : lights_ - inc_lights_, LIGHTS_MIN, LIGHTS_MAX);
     publishLights();
     lights_trim_button_previous_ = true;
   }
