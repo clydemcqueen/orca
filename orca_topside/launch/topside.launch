@@ -4,6 +4,7 @@
   <node name="joystick" pkg="joy" type="joy_node" output="screen" />
 
   <!-- Launch rviz; TODO add configuration -->
-  <node name="rviz" pkg="rviz" type="rviz" output="screen" />
+  <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find orca_topside)/cfg/topside.rviz" output="screen" /> -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find orca_topside)/cfg/topside.rviz" output="screen" />
 
 </launch>
