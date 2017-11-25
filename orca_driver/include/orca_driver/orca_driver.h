@@ -13,6 +13,12 @@
 
 namespace orca_driver {
 
+struct Thruster
+{
+  int channel_;
+  bool reverse_;
+};
+
 // OrcaDriver provides the interface between the Orca hardware and ROS.
 
 class OrcaDriver
@@ -23,7 +29,7 @@ private:
 
   // Parameters
   int num_thrusters_;
-  std::vector<int> thruster_channels_;
+  std::vector<Thruster> thrusters_;
   double thruster_limit_;
   int lights_channel_;
   int tilt_channel_;

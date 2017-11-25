@@ -21,16 +21,17 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv) :
   ROS_INFO("Expecting Maestro on port %s", maestro_port_.c_str());
 
   nh_priv_.param("num_thrusters", num_thrusters_, 6);
-  ROS_INFO("Configured for %d thrusters:", num_thrusters_);
+  ROS_INFO("Configuring for %d thrusters:", num_thrusters_);
   for (int i = 0; i < num_thrusters_; ++i)
   {
-    int channel;
-    nh_priv_.param("thruster_" + std::to_string(i + 1) + "_channel", channel, i); // TODO doesn't work w/ gaps
-    thruster_channels_.push_back(channel);
-    ROS_INFO("Thruster %d on channel %d", i + 1, channel);   
+    Thruster t;
+    nh_priv_.param("thruster_" + std::to_string(i + 1) + "_channel", t.channel_, i); // No checks for channel conflicts!
+    nh_priv_.param("thruster_" + std::to_string(i + 1) + "_reverse", t.reverse_, false);
+    thrusters_.push_back(t);
+    ROS_INFO("Thruster %d on channel %d %s", i + 1, t.channel_, t.reverse_ ? "(reversed)" : "");
   }
 
-  nh_priv_.param("thruster_limit", thruster_limit_, 1.0); // TODO clamp thruster_limit_ to 0, 1.0
+  nh_priv_.param("thruster_limit", thruster_limit_, 1.0);
   ROS_INFO("Thruster effort limited to %g", thruster_limit_);
 
   nh_priv_.param("lights_channel", lights_channel_, 8);
@@ -92,19 +93,18 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    for (int i = 0; i < thruster_channels_.size(); ++i)
+    for (int i = 0; i < thrusters_.size(); ++i)
     {
       double effort = msg->effort[i];
       effort = clamp(effort, -thruster_limit_, thruster_limit_);
 
       // Compensate for ESC programming errors
-      // TODO generalize this
-      if (i == 3)
+      if (thrusters_[i].reverse_ )
       {
         effort = -effort;
       }
 
-      maestro_.setPWM(static_cast<uint8_t>(thruster_channels_[i]), servo_pulse_width(effort, -1.0, 1.0, 1100, 1900));
+      maestro_.setPWM(static_cast<uint8_t>(thrusters_[i].channel_), servo_pulse_width(effort, -1.0, 1.0, 1100, 1900));
     }
   }
   else
@@ -176,12 +176,12 @@ bool OrcaDriver::preDive()
     return false;
   }
 
-  for (int i = 0; i < thruster_channels_.size(); ++i)
+  for (int i = 0; i < thrusters_.size(); ++i)
   {
     uint16_t value;
-    maestro_.getPWM(static_cast<uint8_t>(thruster_channels_[i]), value);
+    maestro_.getPWM(static_cast<uint8_t>(thrusters_[i].channel_), value);
     ROS_INFO("Thruster %d is set at %d", i + 1, value);
-    if (value != 1500) // TODO constant
+    if (value != 1500)
     {
       ROS_ERROR("Thruster %d didn't initialize properly (and possibly others)", i + 1);
       maestro_.disconnect();
