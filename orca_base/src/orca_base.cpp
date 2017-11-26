@@ -1,4 +1,5 @@
 #include <std_msgs/Bool.h>
+#include <visualization_msgs/MarkerArray.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "orca_base/orca_base.h"
@@ -7,8 +8,6 @@
 #include "orca_msgs/Thrusters.h"
 
 // Limits
-// TODO move to shared .h file
-// TODO clamp param inputs to these limits
 constexpr double THRUSTER_MIN = -1.0;
 constexpr double THRUSTER_MAX = 1.0;
 constexpr int TILT_MIN = -45;
@@ -32,6 +31,21 @@ constexpr const T clamp(const T v, const T min, const T max)
 }
 
 namespace orca_base {
+
+struct Thruster
+{
+  std::string frame_id;   // URDF link frame id
+  bool ccw;               // True if counterclockwise
+};
+
+const std::vector<Thruster> THRUSTERS = {
+  {"t200_link_front_right", false},
+  {"t200_link_front_left", false},
+  {"t200_link_rear_right", true},
+  {"t200_link_rear_left", true},
+  {"t200_link_vertical_right", false},
+  {"t200_link_vertical_left", true},
+};
 
 OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf):
   nh_{nh},
@@ -99,6 +113,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   thrusters_pub_ = nh_priv_.advertise<orca_msgs::Thrusters>("thrusters", 1);
   camera_tilt_pub_ = nh_priv_.advertise<orca_msgs::Camera>("camera_tilt", 1);
   lights_pub_ = nh_priv_.advertise<orca_msgs::Lights>("lights", 1);
+  marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("rviz_marker_array", 1);
   yaw_pid_enable_pub_ = nh_priv_.advertise<std_msgs::Bool>("/yaw_pid/pid_enable", 1);
   yaw_state_pub_ = nh_priv_.advertise<std_msgs::Float64>("/yaw_pid/state", 1);
   yaw_setpoint_pub_ = nh_priv_.advertise<std_msgs::Float64>("/yaw_pid/setpoint", 1);
@@ -207,6 +222,55 @@ void OrcaBase::publishOdom()
     // TODO estimate x and y from thruster and imu data
     // TODO publish an odometry message with both pose and velocity
   }
+}
+
+void OrcaBase::publishThrusters()
+{
+  // Calc thruster efforts. Note that strafe and yaw are THRUSTER_MAX for left, THRUSTER_MIN for right.
+  // Order must match the order of the <thruster> tags in the URDF.
+  // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
+  orca_msgs::Thrusters thrusters_msg;
+  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  thrusters_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+
+  // Build rviz markers
+  visualization_msgs::MarkerArray markers_msg;
+  for (int i = 0; i < thrusters_msg.effort.size(); ++i)
+  {
+    int32_t action = thrusters_msg.effort[i] == 0.0 ? action = visualization_msgs::Marker::DELETE : action = visualization_msgs::Marker::ADD;
+    double scale = (THRUSTERS[i].ccw ? -thrusters_msg.effort[i] : thrusters_msg.effort[i]) / 5.0;
+    double offset = scale > 0 ? -0.12 : 0.12;
+
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = THRUSTERS[i].frame_id;
+    marker.header.stamp = ros::Time();
+    marker.ns = "thruster";
+    marker.id = i;
+    marker.type = visualization_msgs::Marker::ARROW;
+    marker.action = action;
+    marker.pose.position.x = 0;
+    marker.pose.position.y = 0;
+    marker.pose.position.z = offset;
+    marker.pose.orientation.x = 0.0;
+    marker.pose.orientation.y = 0.7071068;
+    marker.pose.orientation.z = 0.0;
+    marker.pose.orientation.w = 0.7071068;
+    marker.scale.x = scale;
+    marker.scale.y = 0.01;
+    marker.scale.z = 0.01;
+    marker.color.a = 1.0;
+    marker.color.r = 0.0;
+    marker.color.g = 1.0;
+    marker.color.b = 0.0;
+    markers_msg.markers.push_back(marker);
+  }
+
+  thrusters_pub_.publish(thrusters_msg);
+  marker_pub_.publish(markers_msg);
 }
 
 // Change operation mode
@@ -410,7 +474,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 }
 
-// Called at 100Hz; publish various messages
+// Publish various messages
 void OrcaBase::spinOnce(const ros::TimerEvent &event)
 {
   // Set target yaw
@@ -429,17 +493,8 @@ void OrcaBase::spinOnce(const ros::TimerEvent &event)
     depth_state_pub_.publish(depth_state);
   }
 
-  // Set thruster efforts. Note that strafe and yaw areTHRUSTER_MAX for left, THRUSTER_MIN for right.
-  // Order must match the order of the <thruster> tags in the URDF.
-  // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
-  orca_msgs::Thrusters thrusters_msg;
-  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_pub_.publish(thrusters_msg);
+  // Publish thruster efforts and rviz thrust indicators
+  publishThrusters();
 
   // Publish odometry
   publishOdom();

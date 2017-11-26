@@ -29,6 +29,9 @@ include_directories(
 ## Require C++14
 add_compile_options(-std=c++14)
 
+## Avoid warnings when we use visualization_msgs::Marker::DELETE and visualization_msgs::Marker::ADD in a conditional expression
+add_compile_options(-Wno-enum-compare)
+
 ## Base
 add_executable(orca_base src/orca_base.cpp)
 target_link_libraries(orca_base ${catkin_LIBRARIES})

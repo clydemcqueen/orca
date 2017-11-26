@@ -108,6 +108,7 @@ private:
   ros::Publisher depth_setpoint_pub_;
   ros::Publisher camera_tilt_pub_;
   ros::Publisher lights_pub_;
+  ros::Publisher marker_pub_;
   tf2_ros::TransformBroadcaster tf_broadcaster_;
   
   // Helpers
@@ -116,6 +117,7 @@ private:
   void publishCameraTilt();
   void publishLights();
   void publishOdom();
+  void publishThrusters();
   void setMode(Mode mode, double depth_setpoint);
   
 public:
