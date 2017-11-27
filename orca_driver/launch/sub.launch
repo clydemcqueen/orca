@@ -2,7 +2,7 @@
 
   <!-- Pololu Maestro -->
   <node name="orca_driver" pkg="orca_driver" type="orca_driver" output="log">
-    <param name="voltage_multiplier" value="5.73" />
+    <param name="voltage_multiplier" value="5.05" />
     <param name="thruster_4_reverse" value="true" />
     <param name="tilt_channel" value="6" />
   </node>

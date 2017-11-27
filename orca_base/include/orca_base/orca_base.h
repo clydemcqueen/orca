@@ -59,6 +59,7 @@ private:
   bool imu_ready_;                    // True if we've received at least one imu message
   bool barometer_ready_;              // True if we've received at least one barometer message
   tf2::Quaternion base_orientation_;  // Current orientation
+  double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
 
   // Yaw pid control state
   double yaw_state_;

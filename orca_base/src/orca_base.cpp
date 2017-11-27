@@ -141,9 +141,11 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   tf2::fromMsg(msg->orientation, imu_orientation);
   base_orientation_ = imu_orientation * imu_rotation_;
 
-  // Pull out the yaw for convenience
   double roll, pitch;
   tf2::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
+
+  // Compute a stability metric, used to throttle the pid controllers
+  stability_ = std::min(clamp(std::cos(roll), 0.0, 1.0), clamp(std::cos(pitch), 0.0, 1.0));
 
   if (!imu_ready_)
   {
@@ -157,7 +159,7 @@ void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
   if (mode_ == Mode::stabilize || mode_ == Mode::depth_hold)
   {
-    yaw_effort_ = dead_band(msg->data, effort_dead_band_);
+    yaw_effort_ = dead_band(msg->data * stability_, effort_dead_band_);
   }
 }
 
@@ -166,7 +168,7 @@ void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg
 {
   if (mode_ == Mode::depth_hold)
   {
-    vertical_effort_ = dead_band(-msg->data, effort_dead_band_);
+    vertical_effort_ = dead_band(-msg->data * stability_, effort_dead_band_);
   }
 }
 

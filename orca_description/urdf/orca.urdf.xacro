@@ -15,6 +15,7 @@
   <xacro:property name="THRUSTER_X" value="0.15"/>
   <xacro:property name="THRUSTER_Y" value="0.1"/>
   <xacro:property name="VERT_THRUSTER_Y" value="0.105"/>
+  <xacro:property name="BUOYANCY" value="0.1"/>
 
   <!-- Physics properties -->
   <xacro:property name="FLUID_DENSITY" value="1000.0"/>
@@ -62,7 +63,7 @@
 
     <inertial>
       <origin xyz="0 0 ${-HEIGHT / 3}"/> <!-- Center of mass is low -->
-      <mass value="${TOTAL_MASS - 6 * THRUSTER_MASS - ENCLOSURE_MASS}"/>
+      <mass value="${TOTAL_MASS - 6 * THRUSTER_MASS - ENCLOSURE_MASS - BUOYANCY}"/>
       <inertia
         ixx="1.0" ixy="0.0" ixz="0.0"
         iyy="1.0" iyz="0.0"
