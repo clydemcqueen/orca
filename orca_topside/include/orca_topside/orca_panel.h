@@ -10,6 +10,7 @@
 #include <orca_msgs/Camera.h>
 #include <orca_msgs/Leak.h>
 #include <orca_msgs/Lights.h>
+#include <orca_msgs/Proc.h>
 #include <std_msgs/Float64.h>
 #include <std_msgs/Bool.h>
 #include <sensor_msgs/Imu.h>
@@ -49,6 +50,7 @@ protected:
   ros::Subscriber depth_setpoint_sub_;
   ros::Subscriber leak_sub_;
   ros::Subscriber lights_sub_;
+  ros::Subscriber proc_sub_;
   ros::Subscriber yaw_pid_enable_sub_;
   ros::Subscriber yaw_setpoint_sub_;
 
@@ -59,6 +61,7 @@ protected:
   void depthSetpointCallback(const std_msgs::Float64::ConstPtr &msg);
   void leakCallback(const orca_msgs::Leak::ConstPtr &msg);
   void lightsCallback(const orca_msgs::Lights::ConstPtr &msg);
+  void procCallback(const orca_msgs::Proc::ConstPtr &msg);
   void yawPidEnableCallback(const std_msgs::Bool::ConstPtr &msg);
   void yawSetpointCallback(const std_msgs::Float64::ConstPtr &msg);
 

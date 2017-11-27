@@ -69,6 +69,7 @@ OrcaPanel::OrcaPanel(QWidget* parent) : rviz::Panel(parent)
   depth_setpoint_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_pid/setpoint", 10, &OrcaPanel::depthSetpointCallback, this);
   leak_sub_ = nh_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaPanel::leakCallback, this);
   lights_sub_ = nh_.subscribe<orca_msgs::Lights>("/orca_base/lights", 10, &OrcaPanel::lightsCallback, this);
+  proc_sub_ = nh_.subscribe<orca_msgs::Proc>("/proc", 10, &OrcaPanel::procCallback, this);
   yaw_pid_enable_sub_ = nh_.subscribe<std_msgs::Bool>("/yaw_pid/pid_enable", 10, &OrcaPanel::yawPidEnableCallback, this);
   yaw_setpoint_sub_ = nh_.subscribe<std_msgs::Float64>("/yaw_pid/setpoint", 10, &OrcaPanel::yawSetpointCallback, this);
 
@@ -116,6 +117,11 @@ void OrcaPanel::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
 {
   ROS_INFO("Brightness %d", msg->brightness);
   lights_viewer_->setText(QString("Lights %1\%").arg(msg->brightness));
+}
+
+void OrcaPanel::procCallback(const orca_msgs::Proc::ConstPtr &msg)
+{
+  proc_viewer_->setText(QString("Processor temp %1°").arg(msg->cpu_temp, -1, 'f', 1));
 }
 
 void OrcaPanel::yawPidEnableCallback(const std_msgs::Bool::ConstPtr &msg)
