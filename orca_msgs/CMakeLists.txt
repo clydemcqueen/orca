@@ -8,11 +8,9 @@ find_package(catkin REQUIRED COMPONENTS message_generation)
 add_message_files(DIRECTORY msg FILES
   Barometer.msg
   Battery.msg
-  Camera.msg
+  Control.msg
   Leak.msg
-  Lights.msg
   Proc.msg
-  Thrusters.msg
 )
 generate_messages()
 

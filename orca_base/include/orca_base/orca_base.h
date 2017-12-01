@@ -12,14 +12,6 @@
 
 namespace orca_base {
 
-enum class Mode
-{
-  disarmed,       // Thrusters are off; autopilot is off; all joystick buttons except "arm" are ignored
-  manual,         // Thrusters are on; manual thruster control
-  stabilize,      // Thrusters are on; autopilot is on and controlling yaw
-  depth_hold      // Thrusters are on; autopilot is on and controlling yaw and depth
-};
-
 // OrcaBase provides basic ROV and AUV functions, including joystick operation, attitude hold, depth hold, and waypoint navigation.
 class OrcaBase
 {
@@ -55,7 +47,7 @@ private:
   tf2::Quaternion imu_rotation_;
 
   // General state
-  Mode mode_;
+  uint8_t mode_;
   bool imu_ready_;                    // True if we've received at least one imu message
   bool barometer_ready_;              // True if we've received at least one barometer message
   tf2::Quaternion base_orientation_;  // Current orientation
@@ -100,26 +92,22 @@ private:
   void joyCallback(const sensor_msgs::Joy::ConstPtr& msg);
   
   // Publications
-  ros::Publisher thrusters_pub_;
   ros::Publisher yaw_pid_enable_pub_;
   ros::Publisher yaw_state_pub_;
   ros::Publisher yaw_setpoint_pub_;
   ros::Publisher depth_pid_enable_pub_;
   ros::Publisher depth_state_pub_;
   ros::Publisher depth_setpoint_pub_;
-  ros::Publisher camera_tilt_pub_;
-  ros::Publisher lights_pub_;
+  ros::Publisher control_pub_;
   ros::Publisher marker_pub_;
   tf2_ros::TransformBroadcaster tf_broadcaster_;
   
   // Helpers
   void publishYawSetpoint();
   void publishDepthSetpoint();
-  void publishCameraTilt();
-  void publishLights();
+  void publishControl();
   void publishOdom();
-  void publishThrusters();
-  void setMode(Mode mode, double depth_setpoint);
+  void setMode(uint8_t mode, double depth_setpoint);
   
 public:
   explicit OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf);

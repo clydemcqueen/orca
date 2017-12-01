@@ -6,10 +6,8 @@
 #include <ros/ros.h>
 #include "orca_driver/maestro.h"
 #include "orca_msgs/Battery.h"
-#include "orca_msgs/Camera.h"
+#include "orca_msgs/Control.h"
 #include "orca_msgs/Leak.h"
-#include "orca_msgs/Lights.h"
-#include "orca_msgs/Thrusters.h"
 
 namespace orca_driver {
 
@@ -46,14 +44,10 @@ private:
   orca_msgs::Leak leak_msg_;
   
   // Subscriptions
-  ros::Subscriber camera_tilt_sub_;
-  ros::Subscriber lights_sub_;
-  ros::Subscriber thrusters_sub_;
+  ros::Subscriber control_sub_;
   
   // Callbacks
-  void cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg);
-  void lightsCallback(const orca_msgs::Lights::ConstPtr &msg);
-  void thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg);
+  void controlCallback(const orca_msgs::Control::ConstPtr &msg);
   
   // Publications
   ros::Publisher battery_pub_;

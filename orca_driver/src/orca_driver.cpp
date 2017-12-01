@@ -52,50 +52,26 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv) :
   ROS_INFO("Publishing messages at %d Hz", spin_rate_);
 
   // Set up subscriptions
-  camera_tilt_sub_ = nh_priv_.subscribe<orca_msgs::Camera>("/orca_base/camera_tilt", 10, &OrcaDriver::cameraTiltCallback, this);
-  lights_sub_ = nh_priv_.subscribe<orca_msgs::Lights>("/orca_base/lights", 10, &OrcaDriver::lightsCallback, this);
-  thrusters_sub_ = nh_priv_.subscribe<orca_msgs::Thrusters>("/orca_base/thrusters", 10, &OrcaDriver::thrustersCallback, this);
+  control_sub_ = nh_priv_.subscribe<orca_msgs::Control>("/orca_base/camera_tilt", 10, &OrcaDriver::controlCallback, this);
   
   // Advertise topics that we'll publish on
   battery_pub_ = nh_priv_.advertise<orca_msgs::Battery>("battery", 1);
   leak_pub_ = nh_priv_.advertise<orca_msgs::Leak>("leak", 1);
 }
 
-void OrcaDriver::cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg)
+void OrcaDriver::controlCallback(const orca_msgs::Control::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    uint16_t pwm = servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900);
-    ROS_DEBUG("Set tilt pulse width to %d", pwm);
+    uint16_t pwm = servo_pulse_width(-msg->camera_tilt, -45, 45, 1100, 1900);
     maestro_.setPWM(static_cast<uint8_t>(tilt_channel_), pwm);
-  }
-  else
-  {
-    ROS_ERROR("Can't tilt camera");
-  }
-}
 
-void OrcaDriver::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
-{
-  if (maestro_.ready())
-  {
-    uint16_t pwm = servo_pulse_width(msg->brightness, 0, 100, 1100, 1900);
-    ROS_DEBUG("Set lights pulse width to %d", pwm);
+    pwm = servo_pulse_width(msg->brightness, 0, 100, 1100, 1900);
     maestro_.setPWM(static_cast<uint8_t>(lights_channel_), pwm);
-  }
-  else
-  {
-    ROS_ERROR("Can't set brightness");
-  }
-}
 
-void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
-{
-  if (maestro_.ready())
-  {
     for (int i = 0; i < thrusters_.size(); ++i)
     {
-      double effort = msg->effort[i];
+      double effort = msg->thruster_efforts[i];
       effort = clamp(effort, -thruster_limit_, thruster_limit_);
 
       // Compensate for ESC programming errors
@@ -109,7 +85,7 @@ void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
   }
   else
   {
-    ROS_ERROR("Can't operate thrusters");
+    ROS_ERROR("Maestro not ready, ignoring control message");
   }
 }
 

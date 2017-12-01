@@ -64,11 +64,10 @@ OrcaPanel::OrcaPanel(QWidget* parent) : rviz::Panel(parent)
   // Might be nice to pull topic strings from rviz config, but editing rviz config by hand isn't much fun
   baro_sub_ = nh_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaPanel::baroCallback, this);
   battery_sub_ = nh_.subscribe<orca_msgs::Battery>("/orca_driver/battery", 10, &OrcaPanel::batteryCallback, this);
-  camera_tilt_sub_ = nh_.subscribe<orca_msgs::Camera>("/orca_base/camera_tilt", 10, &OrcaPanel::cameraTiltCallback, this);
+  control_sub_ = nh_.subscribe<orca_msgs::Control>("/orca_base/control", 10, &OrcaPanel::controlCallback, this);
   depth_pid_enable_sub_ = nh_.subscribe<std_msgs::Bool>("/depth_pid/pid_enable", 10, &OrcaPanel::depthPidEnableCallback, this);
   depth_setpoint_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_pid/setpoint", 10, &OrcaPanel::depthSetpointCallback, this);
   leak_sub_ = nh_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaPanel::leakCallback, this);
-  lights_sub_ = nh_.subscribe<orca_msgs::Lights>("/orca_base/lights", 10, &OrcaPanel::lightsCallback, this);
   proc_sub_ = nh_.subscribe<orca_msgs::Proc>("/proc", 10, &OrcaPanel::procCallback, this);
   yaw_pid_enable_sub_ = nh_.subscribe<std_msgs::Bool>("/yaw_pid/pid_enable", 10, &OrcaPanel::yawPidEnableCallback, this);
   yaw_setpoint_sub_ = nh_.subscribe<std_msgs::Float64>("/yaw_pid/setpoint", 10, &OrcaPanel::yawSetpointCallback, this);
@@ -87,10 +86,10 @@ void OrcaPanel::batteryCallback(const orca_msgs::Battery::ConstPtr &msg)
   battery_viewer_->setText(QString("Battery %1V").arg(msg->voltage, -1, 'f', 2));
 }
 
-void OrcaPanel::cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg)
+void OrcaPanel::controlCallback(const orca_msgs::Control::ConstPtr &msg)
 {
-  ROS_INFO("Tilt %d", msg->tilt);
-  camera_tilt_viewer_->setText(QString("Camera tilt %1°").arg(msg->tilt));
+  camera_tilt_viewer_->setText(QString("Camera tilt %1°").arg(msg->camera_tilt));
+  lights_viewer_->setText(QString("Lights %1\%").arg(msg->brightness));
 }
 
 void OrcaPanel::depthPidEnableCallback(const std_msgs::Bool::ConstPtr &msg)
@@ -111,12 +110,6 @@ void OrcaPanel::leakCallback(const orca_msgs::Leak::ConstPtr &msg)
 {
   // TODO make leaks super obvious
   leak_viewer_->setText(QString(msg->leak_detected ? "LEAK LEAK LEAK" : "No leak"));
-}
-
-void OrcaPanel::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
-{
-  ROS_INFO("Brightness %d", msg->brightness);
-  lights_viewer_->setText(QString("Lights %1\%").arg(msg->brightness));
 }
 
 void OrcaPanel::procCallback(const orca_msgs::Proc::ConstPtr &msg)

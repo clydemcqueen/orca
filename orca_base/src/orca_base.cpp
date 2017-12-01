@@ -3,9 +3,7 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "orca_base/orca_base.h"
-#include "orca_msgs/Camera.h"
-#include "orca_msgs/Lights.h"
-#include "orca_msgs/Thrusters.h"
+#include "orca_msgs/Control.h"
 
 // Limits
 constexpr double THRUSTER_MIN = -1.0;
@@ -51,7 +49,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_{nh},
   nh_priv_{nh_priv},
   tf_{tf},
-  mode_{Mode::disarmed},
+  mode_{orca_msgs::Control::disarmed},
   imu_ready_{false},
   barometer_ready_{false},
   forward_effort_{0},
@@ -110,9 +108,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   depth_control_effort_sub_ = nh_priv_.subscribe<std_msgs::Float64>("/depth_pid/control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
 
   // Advertise all topics that we'll publish on
-  thrusters_pub_ = nh_priv_.advertise<orca_msgs::Thrusters>("thrusters", 1);
-  camera_tilt_pub_ = nh_priv_.advertise<orca_msgs::Camera>("camera_tilt", 1);
-  lights_pub_ = nh_priv_.advertise<orca_msgs::Lights>("lights", 1);
+  control_pub_ = nh_priv_.advertise<orca_msgs::Control>("control", 1);
   marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("rviz_marker_array", 1);
   yaw_pid_enable_pub_ = nh_priv_.advertise<std_msgs::Bool>("/yaw_pid/pid_enable", 1);
   yaw_state_pub_ = nh_priv_.advertise<std_msgs::Float64>("/yaw_pid/state", 1);
@@ -163,7 +159,7 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 // Result of yaw pid controller
 void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
-  if (mode_ == Mode::stabilize || mode_ == Mode::depth_hold)
+  if (mode_ == orca_msgs::Control::stabilize || mode_ == orca_msgs::Control::depth_hold)
   {
     yaw_effort_ = dead_band(msg->data * stability_, effort_dead_band_);
   }
@@ -172,7 +168,7 @@ void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 // Result of depth pid controller
 void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
-  if (mode_ == Mode::depth_hold)
+  if (mode_ == orca_msgs::Control::depth_hold)
   {
     vertical_effort_ = dead_band(-msg->data * stability_, effort_dead_band_);
   }
@@ -198,20 +194,6 @@ void OrcaBase::publishDepthSetpoint()
   }
 }
 
-void OrcaBase::publishCameraTilt()
-{
-  orca_msgs::Camera msg;
-  msg.tilt = tilt_;
-  camera_tilt_pub_.publish(msg);
-}
-
-void OrcaBase::publishLights()
-{
-  orca_msgs::Lights msg;
-  msg.brightness = lights_;
-  lights_pub_.publish(msg);
-}
-
 void OrcaBase::publishOdom()
 {
   if (imu_ready_ && barometer_ready_)
@@ -232,25 +214,25 @@ void OrcaBase::publishOdom()
   }
 }
 
-void OrcaBase::publishThrusters()
+void OrcaBase::publishControl()
 {
   // Calc thruster efforts. Note that strafe and yaw are THRUSTER_MAX for left, THRUSTER_MIN for right.
   // Order must match the order of the <thruster> tags in the URDF.
   // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
-  orca_msgs::Thrusters thrusters_msg;
-  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  thrusters_msg.effort.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  orca_msgs::Control control_msg;
+  control_msg.thruster_efforts.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  control_msg.thruster_efforts.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  control_msg.thruster_efforts.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  control_msg.thruster_efforts.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  control_msg.thruster_efforts.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  control_msg.thruster_efforts.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
 
   // Build rviz markers
   visualization_msgs::MarkerArray markers_msg;
-  for (int i = 0; i < thrusters_msg.effort.size(); ++i)
+  for (int i = 0; i < control_msg.thruster_efforts.size(); ++i)
   {
-    int32_t action = thrusters_msg.effort[i] == 0.0 ? action = visualization_msgs::Marker::DELETE : action = visualization_msgs::Marker::ADD;
-    double scale = (THRUSTERS[i].ccw ? -thrusters_msg.effort[i] : thrusters_msg.effort[i]) / 5.0;
+    int32_t action = control_msg.thruster_efforts[i] == 0.0 ? action = visualization_msgs::Marker::DELETE : action = visualization_msgs::Marker::ADD;
+    double scale = (THRUSTERS[i].ccw ? -control_msg.thruster_efforts[i] : control_msg.thruster_efforts[i]) / 5.0;
     double offset = scale > 0 ? -0.12 : 0.12;
 
     visualization_msgs::Marker marker;
@@ -277,16 +259,20 @@ void OrcaBase::publishThrusters()
     markers_msg.markers.push_back(marker);
   }
 
-  thrusters_pub_.publish(thrusters_msg);
+  control_msg.mode = mode_;
+  control_msg.camera_tilt = tilt_;
+  control_msg.brightness = lights_;
+
+  control_pub_.publish(control_msg);
   marker_pub_.publish(markers_msg);
 }
 
 // Change operation mode
-void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
+void OrcaBase::setMode(uint8_t mode, double depth_setpoint = 0.0)
 {
   mode_ = mode;  
 
-  if (mode == Mode::depth_hold)
+  if (mode == orca_msgs::Control::depth_hold)
   {
     // Turn on depth pid controller
     std_msgs::Bool enable;
@@ -308,7 +294,7 @@ void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
     depth_pid_enable_pub_.publish(enable);
   }
 
-  if (mode == Mode::stabilize || mode == Mode::depth_hold)
+  if (mode == orca_msgs::Control::stabilize || mode == orca_msgs::Control::depth_hold)
   {
     // Turn on yaw pid controller
     std_msgs::Bool enable;
@@ -330,7 +316,7 @@ void OrcaBase::setMode(Mode mode, double depth_setpoint = 0.0)
     yaw_pid_enable_pub_.publish(enable);
   }
 
-  if (mode == Mode::disarmed)
+  if (mode == orca_msgs::Control::disarmed)
   {
     forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = 0.0;
   }
@@ -346,16 +332,16 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if (joy_msg->buttons[joy_button_disarm_])
   {
     ROS_INFO("Disarmed");
-    setMode(Mode::disarmed);
+    setMode(orca_msgs::Control::disarmed);
   }
   else if (joy_msg->buttons[joy_button_arm_])
   {
     ROS_INFO("Armed, manual");
-    setMode(Mode::manual);
+    setMode(orca_msgs::Control::manual);
   }
 
   // If we're disarmed, ignore everything else
-  if (mode_ == Mode::disarmed)
+  if (mode_ == orca_msgs::Control::disarmed)
   {
     ROS_INFO("Disarmed, ignoring further input");    
     return;
@@ -365,14 +351,14 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if (joy_msg->buttons[joy_button_manual_])
   {
     ROS_INFO("Manual");
-    setMode(Mode::manual);
+    setMode(orca_msgs::Control::manual);
   }
   else if (joy_msg->buttons[joy_button_stabilize_])
   {
     if (imu_ready_)
     {
       ROS_INFO("Stabilize");
-      setMode(Mode::stabilize);
+      setMode(orca_msgs::Control::stabilize);
     }
     else
     {
@@ -384,7 +370,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     if (imu_ready_ && barometer_ready_)
     {
       ROS_INFO("Depth hold");
-      setMode(Mode::depth_hold, depth_state_);  
+      setMode(orca_msgs::Control::depth_hold, depth_state_);  
     }
     else
     {
@@ -396,7 +382,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     if (imu_ready_ && barometer_ready_)
     {
       ROS_INFO("Surface");
-      setMode(Mode::depth_hold, depth_hold_min);
+      setMode(orca_msgs::Control::depth_hold, depth_hold_min);
       }
     else
     {
@@ -408,7 +394,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if (joy_msg->axes[joy_axis_yaw_trim_] != 0.0 && !yaw_trim_button_previous_)
   {
     // Rising edge
-    if ((mode_ == Mode::stabilize || mode_ == Mode::depth_hold))
+    if ((mode_ == orca_msgs::Control::stabilize || mode_ == orca_msgs::Control::depth_hold))
     {
       yaw_setpoint_ = joy_msg->axes[joy_axis_yaw_trim_] > 0.0 ? yaw_setpoint_ + inc_yaw_ : yaw_setpoint_ - inc_yaw_;
       publishYawSetpoint();
@@ -426,7 +412,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if (joy_msg->axes[joy_axis_vertical_trim_] != 0.0 && !depth_trim_button_previous_)
   {
     // Rising edge
-    if (mode_ == Mode::depth_hold)
+    if (mode_ == orca_msgs::Control::depth_hold)
     {
       depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
         depth_hold_min, depth_hold_max);
@@ -446,7 +432,6 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   {
     // Rising edge
     tilt_ = clamp(joy_msg->buttons[joy_button_tilt_up_] ? tilt_ + inc_tilt_ : tilt_ - inc_tilt_, TILT_MIN, TILT_MAX);
-    publishCameraTilt();
     tilt_trim_button_previous_ = true;
   }
   else if (!joy_msg->buttons[joy_button_tilt_up_] && !joy_msg->buttons[joy_button_tilt_down_] && tilt_trim_button_previous_)
@@ -460,7 +445,6 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   {
   // Rising edge
     lights_ = clamp(joy_msg->buttons[joy_button_bright_] ? lights_ + inc_lights_ : lights_ - inc_lights_, LIGHTS_MIN, LIGHTS_MAX);
-    publishLights();
     lights_trim_button_previous_ = true;
   }
   else if (!joy_msg->buttons[joy_button_bright_] && !joy_msg->buttons[joy_button_dim_] && lights_trim_button_previous_)
@@ -471,12 +455,12 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 
   // Thrusters
   forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_);
-  if (mode_ == Mode::manual)
+  if (mode_ == orca_msgs::Control::manual)
   {
     yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_);
   }
   strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_);
-  if (mode_ == Mode::manual || mode_ == Mode::stabilize)
+  if (mode_ == orca_msgs::Control::manual || mode_ == orca_msgs::Control::stabilize)
   {
     vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_);
   }
@@ -486,7 +470,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 void OrcaBase::spinOnce(const ros::TimerEvent &event)
 {
   // Set target yaw
-  if (mode_ == Mode::stabilize || mode_ == Mode::depth_hold)
+  if (mode_ == orca_msgs::Control::stabilize || mode_ == orca_msgs::Control::depth_hold)
   {
     std_msgs::Float64 yaw_state;
     yaw_state.data = yaw_state_;
@@ -494,15 +478,15 @@ void OrcaBase::spinOnce(const ros::TimerEvent &event)
   }
 
   // Set target depth
-  if (mode_ == Mode::depth_hold)
+  if (mode_ == orca_msgs::Control::depth_hold)
   {
     std_msgs::Float64 depth_state;
     depth_state.data = depth_state_;
     depth_state_pub_.publish(depth_state);
   }
 
-  // Publish thruster efforts and rviz thrust indicators
-  publishThrusters();
+  // Publish controls for thrusters, lights and camera tilt
+  publishControl();
 
   // Publish odometry
   publishOdom();
