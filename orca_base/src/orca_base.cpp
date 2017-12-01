@@ -16,7 +16,7 @@ constexpr int LIGHTS_MIN = 0;
 constexpr int LIGHTS_MAX = 100;
 
 // Message publish rate in Hz
-constexpr int SPIN_RATE = 50;
+constexpr int SPIN_RATE = 10;
 
 template<class T>
 constexpr const T dead_band(const T v, const T d)
@@ -86,7 +86,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_priv_.param("inc_tilt", inc_tilt_, 5);
   nh_priv_.param("inc_lights", inc_lights_, 20);
   nh_priv_.param("input_dead_band", input_dead_band_, 0.05f);            // Don't respond to tiny joystick movements
-  nh_priv_.param("effort_dead_band", effort_dead_band_, 0.01);           // Don't publish tiny thruster efforts
+  nh_priv_.param("effort_dead_band", effort_dead_band_, 0.005);          // Don't publish tiny thruster efforts
 
   // TODO simulate a rotated imu and remove this hack
   nh_priv_.param("simulation", simulation_, true);
@@ -139,6 +139,12 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   // IMU orientation, rotated to account for the placement in the ROV
   tf2::Quaternion imu_orientation;
   tf2::fromMsg(msg->orientation, imu_orientation);
+  if (simulation_)
+  {
+    // Gazebo IMU noise model might result in non-normalized Quaternion
+    // TODO fix simulation
+    imu_orientation = imu_orientation.normalize();
+  }
   base_orientation_ = imu_orientation * imu_rotation_;
 
   double roll, pitch;
@@ -176,9 +182,9 @@ void OrcaBase::publishYawSetpoint()
 {
   if (imu_ready_)
   {
-      std_msgs::Float64 setpoint;
-      setpoint.data = yaw_setpoint_;
-      yaw_setpoint_pub_.publish(setpoint);  
+    std_msgs::Float64 setpoint;
+    setpoint.data = yaw_setpoint_;
+    yaw_setpoint_pub_.publish(setpoint);
   }
 }
 

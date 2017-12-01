@@ -58,7 +58,6 @@
 
   </xacro:macro>
 
-  <!-- base_link -->
   <link name="base_link">
 
     <inertial>
@@ -267,14 +266,15 @@
   <gazebo reference="imu_link">
     <gravity>true</gravity>
     <sensor name="imu_sensor" type="imu">
-      <update_rate>100</update_rate>
-      <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
-        <topicName>/imu/data</topicName>
+      <update_rate>10</update_rate>
+      <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+        <robotNamespace>/</robotNamespace>
+        <topicName>imu/data</topicName>
         <bodyName>imu_link</bodyName>
-        <updateRateHZ>100.0</updateRateHZ>
-        <gaussianNoise>0.0</gaussianNoise> <!-- TODO apply a noise model -->
+        <updateRateHZ>10.0</updateRateHZ>
+        <gaussianNoise>0.0</gaussianNoise>
         <xyzOffset>0 0 0</xyzOffset>
-        <rpyOffset>0 0 0</rpyOffset> <!-- TODO simulate a rotated imu -->
+        <rpyOffset>0 0 0</rpyOffset>
         <frameName>imu_link</frameName>
       </plugin>
       <pose>0 0 0 0 0 0</pose>
