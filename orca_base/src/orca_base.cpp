@@ -71,9 +71,9 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_priv_.param("joy_button_disarm", joy_button_disarm_, 6);            // View
   nh_priv_.param("joy_button_arm", joy_button_arm_, 7);                  // Menu
   nh_priv_.param("joy_button_manual", joy_button_manual_, 0);            // A
-  nh_priv_.param("joy_button_stabilize", joy_button_stabilize_, 2);      // X
-  nh_priv_.param("joy_button_depth_hold", joy_button_depth_hold_, 3);    // Y
-  nh_priv_.param("joy_button_surface", joy_button_surface_, 1);          // B
+  nh_priv_.param("joy_button_hold_y", joy_button_hold_h_, 2);            // X
+  nh_priv_.param("joy_button_hold_d", joy_button_hold_d_, 1);            // B
+  nh_priv_.param("joy_button_hold_hd", joy_button_hold_hd_, 3);          // Y
   nh_priv_.param("joy_button_tilt_down", joy_button_tilt_down_, 4);      // Left bumper
   nh_priv_.param("joy_button_tilt_up", joy_button_tilt_up_, 5);          // Right bumper
   nh_priv_.param("joy_button_bright", joy_button_bright_, 9);            // Left stick
@@ -159,7 +159,7 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 // Result of yaw pid controller
 void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
-  if (mode_ == orca_msgs::Control::stabilize || mode_ == orca_msgs::Control::depth_hold)
+  if (mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd)
   {
     yaw_effort_ = dead_band(msg->data * stability_, effort_dead_band_);
   }
@@ -168,7 +168,7 @@ void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 // Result of depth pid controller
 void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
-  if (mode_ == orca_msgs::Control::depth_hold)
+  if (mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd)
   {
     vertical_effort_ = dead_band(-msg->data * stability_, effort_dead_band_);
   }
@@ -201,16 +201,13 @@ void OrcaBase::publishOdom()
     // Publish a transform from base_link to odom with rpy (from the imu) and z (from the barometer)
     geometry_msgs::TransformStamped odom_tf;
     odom_tf.header.stamp = ros::Time::now();
-    odom_tf.header.frame_id = "odom"; // TODO param
-    odom_tf.child_frame_id = "base_link"; // TODO param
+    odom_tf.header.frame_id = "odom";
+    odom_tf.child_frame_id = "base_link";
     odom_tf.transform.translation.x = 0;
     odom_tf.transform.translation.y = 0;
     odom_tf.transform.translation.z = -depth_state_;
     odom_tf.transform.rotation = tf2::toMsg(base_orientation_);
     tf_broadcaster_.sendTransform(odom_tf);
-
-    // TODO estimate x and y from thruster and imu data
-    // TODO publish an odometry message with both pose and velocity
   }
 }
 
@@ -268,11 +265,11 @@ void OrcaBase::publishControl()
 }
 
 // Change operation mode
-void OrcaBase::setMode(uint8_t mode, double depth_setpoint = 0.0)
+void OrcaBase::setMode(uint8_t mode)
 {
   mode_ = mode;  
 
-  if (mode == orca_msgs::Control::depth_hold)
+  if (mode == orca_msgs::Control::hold_d || mode == orca_msgs::Control::hold_hd)
   {
     // Turn on depth pid controller
     std_msgs::Bool enable;
@@ -280,11 +277,11 @@ void OrcaBase::setMode(uint8_t mode, double depth_setpoint = 0.0)
     depth_pid_enable_pub_.publish(enable);
     
     // Set target depth
-    depth_setpoint_ = depth_setpoint;
+    depth_setpoint_ = depth_state_;
     publishDepthSetpoint();
 
     // Clear button state
-    depth_trim_button_previous_ = false;    
+    depth_trim_button_previous_ = false;
   }
   else
   {
@@ -294,7 +291,7 @@ void OrcaBase::setMode(uint8_t mode, double depth_setpoint = 0.0)
     depth_pid_enable_pub_.publish(enable);
   }
 
-  if (mode == orca_msgs::Control::stabilize || mode == orca_msgs::Control::depth_hold)
+  if (mode == orca_msgs::Control::hold_h || mode == orca_msgs::Control::hold_hd)
   {
     // Turn on yaw pid controller
     std_msgs::Bool enable;
@@ -353,40 +350,40 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     ROS_INFO("Manual");
     setMode(orca_msgs::Control::manual);
   }
-  else if (joy_msg->buttons[joy_button_stabilize_])
+  else if (joy_msg->buttons[joy_button_hold_h_])
   {
     if (imu_ready_)
     {
-      ROS_INFO("Stabilize");
-      setMode(orca_msgs::Control::stabilize);
+      ROS_INFO("Hold heading");
+      setMode(orca_msgs::Control::hold_h);
     }
     else
     {
-      ROS_ERROR("IMU not ready, can't stabilize");
+      ROS_ERROR("IMU not ready, can't hold heading");
     }
   }
-  else if (joy_msg->buttons[joy_button_depth_hold_])
+  else if (joy_msg->buttons[joy_button_hold_d_])
   {
-    if (imu_ready_ && barometer_ready_)
+    if (barometer_ready_)
     {
-      ROS_INFO("Depth hold");
-      setMode(orca_msgs::Control::depth_hold, depth_state_);  
+      ROS_INFO("Hold depth");
+      setMode(orca_msgs::Control::hold_d);
     }
     else
     {
-      ROS_ERROR("Barometer and/or IMU not ready, can't hold depth");
+      ROS_ERROR("Barometer not ready, can't hold depth");
     }
   }
-  else if (joy_msg->buttons[joy_button_surface_])
+  else if (joy_msg->buttons[joy_button_hold_hd_])
   {
     if (imu_ready_ && barometer_ready_)
     {
-      ROS_INFO("Surface");
-      setMode(orca_msgs::Control::depth_hold, depth_hold_min);
+      ROS_INFO("Hold heading and depth");
+      setMode(orca_msgs::Control::hold_hd);
       }
     else
     {
-      ROS_ERROR("Barometer and/or IMU not ready, can't automatically surface");
+      ROS_ERROR("Barometer and/or IMU not ready, can't hold heading and depth");
     }
   }
 
@@ -394,7 +391,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if (joy_msg->axes[joy_axis_yaw_trim_] != 0.0 && !yaw_trim_button_previous_)
   {
     // Rising edge
-    if ((mode_ == orca_msgs::Control::stabilize || mode_ == orca_msgs::Control::depth_hold))
+    if ((mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd))
     {
       yaw_setpoint_ = joy_msg->axes[joy_axis_yaw_trim_] > 0.0 ? yaw_setpoint_ + inc_yaw_ : yaw_setpoint_ - inc_yaw_;
       publishYawSetpoint();
@@ -412,7 +409,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if (joy_msg->axes[joy_axis_vertical_trim_] != 0.0 && !depth_trim_button_previous_)
   {
     // Rising edge
-    if (mode_ == orca_msgs::Control::depth_hold)
+    if (mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd)
     {
       depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
         depth_hold_min, depth_hold_max);
@@ -455,12 +452,12 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 
   // Thrusters
   forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_);
-  if (mode_ == orca_msgs::Control::manual)
+  if (mode_ == orca_msgs::Control::manual || mode_ == orca_msgs::Control::hold_d)
   {
     yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_);
   }
   strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_);
-  if (mode_ == orca_msgs::Control::manual || mode_ == orca_msgs::Control::stabilize)
+  if (mode_ == orca_msgs::Control::manual || mode_ == orca_msgs::Control::hold_h)
   {
     vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_);
   }
@@ -470,7 +467,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 void OrcaBase::spinOnce(const ros::TimerEvent &event)
 {
   // Set target yaw
-  if (mode_ == orca_msgs::Control::stabilize || mode_ == orca_msgs::Control::depth_hold)
+  if (mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd)
   {
     std_msgs::Float64 yaw_state;
     yaw_state.data = yaw_state_;
@@ -478,7 +475,7 @@ void OrcaBase::spinOnce(const ros::TimerEvent &event)
   }
 
   // Set target depth
-  if (mode_ == orca_msgs::Control::depth_hold)
+  if (mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd)
   {
     std_msgs::Float64 depth_state;
     depth_state.data = depth_state_;

@@ -1,8 +1,9 @@
 # Mode
 uint8 disarmed=0    # Thrusters are off; autopilot is off; all joystick buttons except "arm" are ignored
 uint8 manual=1      # Thrusters are on; manual thruster control
-uint8 stabilize=2   # Thrusters are on; autopilot is on and controlling yaw
-uint8 depth_hold=3  # Thrusters are on; autopilot is on and controlling yaw and depth
+uint8 hold_h=2      # Thrusters are on; autopilot is on and controlling heading
+uint8 hold_d=3      # Thrusters are on; autopilot is on and controlling depth
+uint8 hold_hd=4     # Thrusters are on; autopilot is on and controlling heading and depth
 uint8 mode
 
 # Camera tilt in degrees, from -45 (down) to +45 (up)

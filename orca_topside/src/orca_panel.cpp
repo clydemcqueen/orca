@@ -124,11 +124,14 @@ void OrcaPanel::controlCallback(const orca_msgs::Control::ConstPtr &msg)
     case orca_msgs::Control::manual:
       mode_viewer_->setText("Manual control");
       break;
-    case orca_msgs::Control::stabilize:
-      mode_viewer_->setText("Stablizing");
+    case orca_msgs::Control::hold_h:
+      mode_viewer_->setText("Hold heading");
       break;
-    case orca_msgs::Control::depth_hold:
-      mode_viewer_->setText("Holding depth");
+    case orca_msgs::Control::hold_d:
+      mode_viewer_->setText("Hold depth");
+      break;
+    case orca_msgs::Control::hold_hd:
+      mode_viewer_->setText("Hold heading and depth");
       break;
     default:
       mode_viewer_->setText("ERROR: unknown mode");

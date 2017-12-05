@@ -55,9 +55,9 @@ Plug in your gamepad, hit the [menu button](https://support.xbox.com/en-US/xbox-
 * Menu button: arm
 * View button: disarm
 * A button: manual
-* X button: hold yaw
-* Y button: hold yaw and depth
-* B button: go to surface and hold yaw and depth
+* X button: hold heading
+* B button: hold depth
+* Y button: hold heading and depth
 
 ## Code Structure
 

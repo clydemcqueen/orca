@@ -12,7 +12,7 @@
 
 namespace orca_base {
 
-// OrcaBase provides basic ROV and AUV functions, including joystick operation, attitude hold, depth hold, and waypoint navigation.
+// OrcaBase provides basic ROV and AUV functions, including joystick operation, heading hold, depth hold, and waypoint navigation.
 class OrcaBase
 {
 private:
@@ -30,9 +30,9 @@ private:
   int joy_button_disarm_;
   int joy_button_arm_;
   int joy_button_manual_;
-  int joy_button_stabilize_;
-  int joy_button_depth_hold_;
-  int joy_button_surface_;
+  int joy_button_hold_h_;
+  int joy_button_hold_d_;
+  int joy_button_hold_hd_;
   int joy_button_tilt_down_;
   int joy_button_tilt_up_;
   int joy_button_bright_;
@@ -107,7 +107,7 @@ private:
   void publishDepthSetpoint();
   void publishControl();
   void publishOdom();
-  void setMode(uint8_t mode, double depth_setpoint);
+  void setMode(uint8_t mode);
   
 public:
   explicit OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf);
