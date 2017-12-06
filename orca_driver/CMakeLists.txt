@@ -29,4 +29,5 @@ add_compile_options(-std=c++14)
 
 ## Driver
 add_executable(orca_driver src/orca_driver.cpp src/maestro.cpp)
+add_dependencies(orca_driver ${catkin_EXPORTED_TARGETS})
 target_link_libraries(orca_driver ${catkin_LIBRARIES})

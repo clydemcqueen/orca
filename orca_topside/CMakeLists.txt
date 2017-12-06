@@ -38,5 +38,5 @@ add_definitions(-DQT_NO_KEYWORDS)
 
 ## Add include file here; this works around a build problem w/ Qt MOC
 add_library(orca_topside src/orca_panel.cpp include/orca_topside/orca_panel.h)
-
+add_dependencies(orca_topside ${catkin_EXPORTED_TARGETS})
 target_link_libraries(orca_topside ${QT_LIBRARIES} ${catkin_LIBRARIES})

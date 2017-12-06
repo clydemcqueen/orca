@@ -34,4 +34,5 @@ add_compile_options(-Wno-enum-compare)
 
 ## Base
 add_executable(orca_base src/orca_base.cpp)
+add_dependencies(orca_base ${catkin_EXPORTED_TARGETS})
 target_link_libraries(orca_base ${catkin_LIBRARIES})

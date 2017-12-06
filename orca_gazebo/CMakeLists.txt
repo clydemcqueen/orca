@@ -32,9 +32,9 @@ link_directories(${GAZEBO_LIBRARY_DIRS})
 add_compile_options(-std=c++14)
 
 add_library(ThrusterPlugin src/thruster_plugin.cpp)
-target_link_libraries(ThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_dependencies(ThrusterPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(ThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 
 add_library(BarometerPlugin src/barometer_plugin.cpp)
-target_link_libraries(BarometerPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_dependencies(BarometerPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(BarometerPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
