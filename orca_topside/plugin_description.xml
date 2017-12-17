@@ -6,4 +6,11 @@
       Orca ROV topside controls
     </description>
   </class>
+  <class name="orca_topside/VideoPanel"
+         type="orca_topside::VideoPanel"
+         base_class_type="rviz::Panel">
+    <description>
+      Orca ROV h264 video
+    </description>
+  </class>
 </library>

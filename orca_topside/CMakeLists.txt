@@ -17,26 +17,29 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 ## Require C++14
 add_compile_options(-std=c++14)
 
-## Topside includes an rviz plugin, so we need to include Qt and Ogre
-
 set(CMAKE_AUTOMOC ON)
 
 ## Qt4 or 5?
 if(rviz_QT_VERSION VERSION_LESS "5")
   message(STATUS "Using Qt4 based on the rviz_QT_VERSION: ${rviz_QT_VERSION}")
   find_package(Qt4 ${rviz_QT_VERSION} REQUIRED QtCore QtGui)
-  ## pull in all required include dirs, define QT_LIBRARIES, etc.
   include(${QT_USE_FILE})
+  find_package(QtGStreamer REQUIRED)
 else()
   message(STATUS "Using Qt5 based on the rviz_QT_VERSION: ${rviz_QT_VERSION}")
   find_package(Qt5 ${rviz_QT_VERSION} REQUIRED Core Widgets)
-  ## make target_link_libraries(${QT_LIBRARIES}) pull in all required dependencies
   set(QT_LIBRARIES Qt5::Widgets)
+  find_package(Qt5GStreamer REQUIRED)
 endif()
 
-add_definitions(-DQT_NO_KEYWORDS)
+## More include directories
+include_directories(${QTGSTREAMER_INCLUDES})
 
-## Add include file here; this works around a build problem w/ Qt MOC
-add_library(orca_topside src/orca_panel.cpp include/orca_topside/orca_panel.h)
+## Qt MOC can't find .h files if they're in a different directory; as a work-around add them here
+add_library(orca_topside
+  src/orca_panel.cpp
+  src/video_panel.cpp
+  include/orca_topside/orca_panel.h
+  include/orca_topside/video_panel.h)
 add_dependencies(orca_topside ${catkin_EXPORTED_TARGETS})
-target_link_libraries(orca_topside ${QT_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(orca_topside ${QT_LIBRARIES} ${QTGSTREAMER_UI_LIBRARIES} ${catkin_LIBRARIES})

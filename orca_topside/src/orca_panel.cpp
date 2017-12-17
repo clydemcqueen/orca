@@ -1,5 +1,3 @@
-#include <OGRE/OgreSceneNode.h>
-
 #include <tf/transform_listener.h>
 
 #include <rviz/visualization_manager.h>
@@ -9,7 +7,7 @@
 #include <rviz/frame_manager.h>
 
 #include <QLineEdit>
-#include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QLabel>
 
 #include "orca_topside/orca_panel.h"
@@ -92,7 +90,7 @@ OrcaPanel::OrcaPanel(QWidget* parent) : rviz::Panel(parent),
 
 OrcaPanel::~OrcaPanel()
 {
-  ROS_DEBUG("Destructing OrcaPanel");
+  ROS_DEBUG("Destroying OrcaPanel");
 }
 
 void OrcaPanel::baroCallback(const orca_msgs::Barometer::ConstPtr &msg)
@@ -197,7 +195,7 @@ void OrcaPanel::timerCallback(const ros::TimerEvent &event)
   }
 }
 
-} // orca_topside
+} // namespace orca_topside
 
 // Tell pluginlib about this class
 #include <pluginlib/class_list_macros.h>
