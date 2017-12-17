@@ -113,7 +113,7 @@ public:
   explicit OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf);
   ~OrcaBase() {}; // Suppress default copy and move constructors
 
-  void spinOnce(const ros::TimerEvent &event);
+  void spinOnce();
 };
 
 } // namespace orca_base

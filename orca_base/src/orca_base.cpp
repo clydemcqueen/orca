@@ -464,7 +464,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 }
 
 // Publish various messages
-void OrcaBase::spinOnce(const ros::TimerEvent &event)
+void OrcaBase::spinOnce()
 {
   // Set target yaw
   if (mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd)
@@ -500,9 +500,19 @@ int main(int argc, char **argv)
   tf2_ros::TransformListener tf{tf_buffer};
   orca_base::OrcaBase orca_base{nh, nh_priv, tf};
 
-  ros::Timer t = nh.createTimer(ros::Duration(1.0 / SPIN_RATE), &orca_base::OrcaBase::spinOnce, &orca_base);
+  ROS_INFO("Entering main loop");
+  ros::Rate r(SPIN_RATE);
+  while (ros::ok())
+  {
+    // Do our work
+    orca_base.spinOnce();
 
-  ros::spin();
+    // Respond to incoming messages
+    ros::spinOnce();
+
+    // Wait
+    r.sleep();
+  }
 
   return 0;
 }
