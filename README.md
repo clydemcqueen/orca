@@ -22,7 +22,7 @@ Install [ROS Kinetic](http://wiki.ros.org/Installation/Ubuntu). Select `ros-kine
 
 Install these additional packages:
 ~~~~
-sudo apt install ros-kinetic-pid
+sudo apt install ros-kinetic-pid libqt5gstreamer-dev
 ~~~~
 
 Create a catkin workspace:
@@ -39,7 +39,7 @@ Download and compile Orca:
 cd ~/catkin_ws/src
 git clone https://github.com/clydemcqueen/orca.git
 cd ..
-catkin_make --only-pkg-with-deps orca_msgs orca_description orca_base orca_gazebo
+catkin_make
 ~~~~
 
 Run the simulation:
