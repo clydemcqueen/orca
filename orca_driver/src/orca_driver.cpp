@@ -1,17 +1,42 @@
 #include "orca_driver/orca_driver.h"
 
+namespace orca_driver {
+
 template<class T>
 constexpr const T clamp(const T v, const T min, const T max)
 {
   return v > max ? max : (v < min ? min : v);
 }
-  
+
+// Calc pulse width for typical servos
 constexpr const uint16_t servo_pulse_width(const double v, const double v_min, const double v_max, const uint16_t pwm_min, const uint16_t pwm_max)
 {
   return clamp(static_cast<uint16_t>(pwm_min + static_cast<double>(pwm_max - pwm_min) / (v_max - v_min) * (v - v_min)), pwm_min, pwm_max);
 }
 
-namespace orca_driver {
+// Calc pulse width for BlueRobotics T200 thrusters
+constexpr const uint16_t t200_pulse_width(const double effort)
+{
+  // Thrust curve at http://docs.bluerobotics.com/thrusters/t200/
+  constexpr uint16_t max_reverse = 1100;
+  constexpr uint16_t min_reverse = 1475; // 25us dead band
+  constexpr uint16_t stop        = 1500;
+  constexpr uint16_t min_forward = 1525; // 25us dead band
+  constexpr uint16_t max_forward = 1850; // Throttle slightly so that reverse and forward curves are similar
+
+  if (effort > 1.0)
+  {
+    return servo_pulse_width(effort, 0.0, 1.0, min_forward, max_forward);
+  }
+  else if (effort < 0.0)
+  {
+    return servo_pulse_width(effort, -1.0, 0.0, max_reverse, min_reverse);
+  }
+  else
+  {
+    return stop;
+  }
+}
 
 OrcaDriver::OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv) :
   nh_{nh},
@@ -80,7 +105,7 @@ void OrcaDriver::controlCallback(const orca_msgs::Control::ConstPtr &msg)
         effort = -effort;
       }
 
-      maestro_.setPWM(static_cast<uint8_t>(thrusters_[i].channel_), servo_pulse_width(effort, -1.0, 1.0, 1100, 1900));
+      maestro_.setPWM(static_cast<uint8_t>(thrusters_[i].channel_), t200_pulse_width(effort));
     }
   }
   else
