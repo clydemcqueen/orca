@@ -15,7 +15,7 @@ constexpr const uint16_t servo_pulse_width(const double v, const double v_min, c
 }
 
 // Calc pulse width for BlueRobotics T200 thrusters
-constexpr const uint16_t t200_pulse_width(const double effort)
+const uint16_t t200_pulse_width(const double effort)
 {
   // Thrust curve at http://docs.bluerobotics.com/thrusters/t200/
   constexpr uint16_t max_reverse = 1100;
@@ -77,7 +77,7 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv) :
   ROS_INFO("Publishing messages at %d Hz", spin_rate_);
 
   // Set up subscriptions
-  control_sub_ = nh_priv_.subscribe<orca_msgs::Control>("/orca_base/camera_tilt", 10, &OrcaDriver::controlCallback, this);
+  control_sub_ = nh_priv_.subscribe<orca_msgs::Control>("/orca_base/control", 10, &OrcaDriver::controlCallback, this);
   
   // Advertise topics that we'll publish on
   battery_pub_ = nh_priv_.advertise<orca_msgs::Battery>("battery", 1);
