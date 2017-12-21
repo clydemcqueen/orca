@@ -19,9 +19,6 @@ class QLabel;
 
 namespace orca_topside {
 
-// TODO compass widget
-// TODO attitude widget
-
 class OrcaPanel: public rviz::Panel
 {
 public:
@@ -35,14 +32,12 @@ protected:
   QLabel* battery_viewer_;
   QLabel* camera_tilt_viewer_;
   QLabel* depth_viewer_;
-  QLabel* depth_setpoint_viewer_;
   QLabel* leak_viewer_;
   QLabel* lights_viewer_;
   QLabel* mode_viewer_;
   QLabel* proc_viewer_;
   QLabel* temperature_viewer_;
   QLabel* yaw_viewer_;
-  QLabel* yaw_setpoint_viewer_;
 
   QPalette ok_palette_;
   QPalette alert_palette_;
@@ -52,7 +47,7 @@ protected:
   bool yaw_pid_enabled_;
 
   double depth_setpoint_;
-  double yaw_setpoint_;
+  double heading_setpoint_;
 
   ros::Subscriber baro_sub_;
   ros::Subscriber battery_sub_;

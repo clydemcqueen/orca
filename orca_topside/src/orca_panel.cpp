@@ -14,11 +14,20 @@
 
 namespace orca_topside {
 
+// Convert yaw (magnetic North, East is 0.0, right-handed, radians)
+// to compass heading (true North, East is 90.0, left-handed, degrees)
+constexpr const double yaw2heading(double yaw)
+{
+  constexpr double declination = 15.44; // Seattle declination is 15.44 E
+
+  return 90.0 + declination - qRadiansToDegrees(yaw);
+}
+
 OrcaPanel::OrcaPanel(QWidget* parent) : rviz::Panel(parent),
   depth_pid_enabled_{false},
   yaw_pid_enabled_{false},
   depth_setpoint_{0},
-  yaw_setpoint_{0}
+  heading_setpoint_{0}
 {
   ROS_DEBUG("Constructing OrcaPanel");
 
@@ -166,7 +175,7 @@ void OrcaPanel::yawPidEnableCallback(const std_msgs::Bool::ConstPtr &msg)
 
 void OrcaPanel::yawSetpointCallback(const std_msgs::Float64::ConstPtr &msg)
 {
-  yaw_setpoint_ = -qRadiansToDegrees(msg->data); // TODO sign is flipped
+  heading_setpoint_ = yaw2heading(msg->data);
 }
 
 void OrcaPanel::timerCallback(const ros::TimerEvent &event)
@@ -177,14 +186,15 @@ void OrcaPanel::timerCallback(const ros::TimerEvent &event)
     try
     {
       tf::StampedTransform transform;
-      tfListener->lookupTransform("base_link", "odom", ros::Time(0), transform);
+      tfListener->lookupTransform("odom", "base_link", ros::Time(0), transform);
       tf::Quaternion orientation = transform.getRotation();
       double roll, pitch, yaw;
       tf::Matrix3x3(orientation).getRPY(roll, pitch, yaw);
+      double heading = yaw2heading(yaw);
 
       QString heading_string = yaw_pid_enabled_ ?
-        QString("Heading %1° (%2)").arg(qRadiansToDegrees(yaw), -1, 'f', 0).arg(yaw_setpoint_, -1, 'f', 0) :
-        QString("Heading %1°").arg(qRadiansToDegrees(yaw), -1, 'f', 0);
+        QString("Heading %1° (%2)").arg(heading, -1, 'f', 0).arg(heading_setpoint_, -1, 'f', 0) :
+        QString("Heading %1°").arg(heading, -1, 'f', 0);
 
       yaw_viewer_->setText(heading_string);
     }
