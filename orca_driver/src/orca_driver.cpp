@@ -2,41 +2,8 @@
 
 namespace orca_driver {
 
-template<class T>
-constexpr const T clamp(const T v, const T min, const T max)
-{
-  return v > max ? max : (v < min ? min : v);
-}
-
-// Calc pulse width for typical servos
-constexpr const uint16_t servo_pulse_width(const double v, const double v_min, const double v_max, const uint16_t pwm_min, const uint16_t pwm_max)
-{
-  return clamp(static_cast<uint16_t>(pwm_min + static_cast<double>(pwm_max - pwm_min) / (v_max - v_min) * (v - v_min)), pwm_min, pwm_max);
-}
-
-// Calc pulse width for BlueRobotics T200 thrusters
-const uint16_t t200_pulse_width(const double effort)
-{
-  // Thrust curve at http://docs.bluerobotics.com/thrusters/t200/
-  constexpr uint16_t max_reverse = 1100;
-  constexpr uint16_t min_reverse = 1475; // 25us dead band
-  constexpr uint16_t stop        = 1500;
-  constexpr uint16_t min_forward = 1525; // 25us dead band
-  constexpr uint16_t max_forward = 1850; // Throttle slightly so that reverse and forward curves are similar
-
-  if (effort > 1.0)
-  {
-    return servo_pulse_width(effort, 0.0, 1.0, min_forward, max_forward);
-  }
-  else if (effort < 0.0)
-  {
-    return servo_pulse_width(effort, -1.0, 0.0, max_reverse, min_reverse);
-  }
-  else
-  {
-    return stop;
-  }
-}
+// Message publish rate in Hz
+constexpr int SPIN_RATE = 50;
 
 OrcaDriver::OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv) :
   nh_{nh},
@@ -56,9 +23,6 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv) :
     ROS_INFO("Thruster %d on channel %d %s", i + 1, t.channel_, t.reverse_ ? "(reversed)" : "");
   }
 
-  nh_priv_.param("thruster_limit", thruster_limit_, 1.0);
-  ROS_INFO("Thruster effort limited to %g", thruster_limit_);
-
   nh_priv_.param("lights_channel", lights_channel_, 8);
   ROS_INFO("Lights on channel %d", lights_channel_);
 
@@ -73,10 +37,7 @@ OrcaDriver::OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv) :
   nh_priv_.param("leak_channel", leak_channel_, 12); // Must be digital input
   ROS_INFO("Leak sensor on channel %d", leak_channel_);
 
-  nh_priv_.param("spin_rate", spin_rate_, 50);
-  ROS_INFO("Publishing messages at %d Hz", spin_rate_);
-
-  // Set up subscriptions
+  // Set up subscription
   control_sub_ = nh_priv_.subscribe<orca_msgs::Control>("/orca_base/control", 10, &OrcaDriver::controlCallback, this);
   
   // Advertise topics that we'll publish on
@@ -88,24 +49,17 @@ void OrcaDriver::controlCallback(const orca_msgs::Control::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    uint16_t pwm = servo_pulse_width(-msg->camera_tilt, -45, 45, 1100, 1900);
-    maestro_.setPWM(static_cast<uint8_t>(tilt_channel_), pwm);
-
-    pwm = servo_pulse_width(msg->brightness, 0, 100, 1100, 1900);
-    maestro_.setPWM(static_cast<uint8_t>(lights_channel_), pwm);
+    maestro_.setPWM(static_cast<uint8_t>(tilt_channel_), msg->camera_tilt_pwm);
+    maestro_.setPWM(static_cast<uint8_t>(lights_channel_), msg->brightness_pwm);
 
     for (int i = 0; i < thrusters_.size(); ++i)
     {
-      double effort = msg->thruster_efforts[i];
-      effort = clamp(effort, -thruster_limit_, thruster_limit_);
+      uint16_t pwm = msg->thruster_pwm[i];
 
       // Compensate for ESC programming errors
-      if (thrusters_[i].reverse_ )
-      {
-        effort = -effort;
-      }
+      if (thrusters_[i].reverse_) pwm = static_cast<uint16_t>(3000 - pwm);
 
-      maestro_.setPWM(static_cast<uint8_t>(thrusters_[i].channel_), t200_pulse_width(effort));
+      maestro_.setPWM(static_cast<uint8_t>(thrusters_[i].channel_), pwm);
     }
   }
   else
@@ -119,6 +73,7 @@ bool OrcaDriver::readBattery()
   double temp;
   if (maestro_.ready() && maestro_.getAnalog(static_cast<uint8_t>(voltage_channel_), temp))
   {
+    battery_msg_.header.stamp = ros::Time::now();
     battery_msg_.voltage = temp * voltage_multiplier_;
     return true;
   }
@@ -134,7 +89,8 @@ bool OrcaDriver::readLeak()
   bool temp;
   if (maestro_.ready() && maestro_.getDigital(static_cast<uint8_t>(leak_channel_), temp))
   {
-    leak_msg_.leak_detected = temp;
+    leak_msg_.header.stamp = ros::Time::now();
+    leak_msg_.leak_detected = static_cast<uint8_t>(temp);
     return true;
   }
   else
@@ -213,7 +169,7 @@ bool OrcaDriver::run()
   }
 
   ROS_INFO("Entering main loop");  
-  ros::Rate r(spin_rate_);
+  ros::Rate r(SPIN_RATE);
   while (ros::ok())
   {
     // Do our work

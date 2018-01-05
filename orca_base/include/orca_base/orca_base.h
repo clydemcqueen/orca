@@ -74,8 +74,8 @@ private:
   bool tilt_trim_button_previous_;
 
   // Lights
-  int lights_;
-  bool lights_trim_button_previous_;
+  int brightness_;
+  bool brightness_trim_button_previous_;
 
   // Subscriptions
   ros::Subscriber baro_sub_;

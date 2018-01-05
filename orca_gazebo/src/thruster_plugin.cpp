@@ -8,6 +8,7 @@
 #include "ros/callback_queue.h"
 #include "ros/subscribe_options.h"
 
+#include "orca_base/orca_pwm.h"
 #include "orca_msgs/Control.h"
 
 namespace gazebo
@@ -28,8 +29,8 @@ namespace gazebo
 // We listen for ROS Thruster messages and apply thrust forces to base_link.
 //
 // There can the multiple <thruster> tags; the number and order of <thruster> tags must match
-// the number and order of float64s in the Thruster message. Each float indicates effort and
-// ranges from -1.0 (full reverse) to 1.0 (full forward).
+// the number and order of int32s in the Thruster message. Each int32 indicates ESC pulse width and
+// ranges from 1100 (full reverse) through 1500 (stop) to 1900 (full forward).
 //
 //    <ros_topic> specifics the topic for Thruster messages. Default is /thrusters.
 //    <force> specifies force generated this thruster in Newtons. Default is 50N. Use negative force for clockwise spin.
@@ -110,7 +111,7 @@ public:
     nh_.reset(new ros::NodeHandle("thruster_plugin"));
 
     // Look for our ROS topic
-    std::string ros_topic = "/thrusters";
+    std::string ros_topic = "/control";
     if (sdf->HasElement("ros_topic"))
     {
       ros_topic = sdf->GetElement("ros_topic")->Get<std::string>();
@@ -161,9 +162,9 @@ public:
   // Handle an incoming message from ROS
   void OnRosMsg(const orca_msgs::ControlConstPtr &msg)
   {
-    for (int i = 0; i < thrusters_.size() && i < msg->thruster_efforts.size(); ++i)
+    for (int i = 0; i < thrusters_.size() && i < msg->thruster_pwm.size(); ++i)
     {
-      thrusters_[i].effort = msg->thruster_efforts[i];
+      thrusters_[i].effort = orca_base::pwm_to_effort(msg->thruster_pwm[i]);
     }
   }
 
@@ -173,7 +174,7 @@ public:
     for (Thruster t : thrusters_)
     {
       // Default thruster force points directly up
-      gazebo::math::Vector3 force = {0, 0, t.effort * t.force};
+      gazebo::math::Vector3 force = {0.0, 0.0, t.effort * t.force};
 
       // Rotate force into place on the frame
       gazebo::math::Quaternion q = {t.rpy};

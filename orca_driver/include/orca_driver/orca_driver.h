@@ -28,12 +28,10 @@ private:
   // Parameters
   int num_thrusters_;
   std::vector<Thruster> thrusters_;
-  double thruster_limit_;
   int lights_channel_;
   int tilt_channel_;
   int voltage_channel_;
   int leak_channel_;
-  int spin_rate_;
   std::string maestro_port_;
   double voltage_multiplier_;
   double voltage_min_;

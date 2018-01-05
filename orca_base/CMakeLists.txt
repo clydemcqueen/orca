@@ -18,6 +18,7 @@ catkin_package(
     sensor_msgs
     std_msgs
     tf
+  INCLUDE_DIRS include
 )
 
 ## Set up include directories
@@ -36,3 +37,7 @@ add_compile_options(-Wno-enum-compare)
 add_executable(orca_base src/orca_base.cpp)
 add_dependencies(orca_base ${catkin_EXPORTED_TARGETS})
 target_link_libraries(orca_base ${catkin_LIBRARIES})
+
+## Install headers
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})

@@ -4,6 +4,7 @@ project(orca_gazebo)
 ## Find catkin and everything we need in ROS
 find_package(catkin REQUIRED COMPONENTS 
   gazebo_ros
+  orca_base
   orca_msgs
   roscpp
   rospy
@@ -16,11 +17,11 @@ find_package(gazebo REQUIRED)
 catkin_package(
   CATKIN_DEPENDS 
     gazebo_ros
+    orca_base
     orca_msgs
     roscpp
     rospy
 )
-
 
 ## Set up include directories
 include_directories(${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})

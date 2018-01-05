@@ -3,7 +3,7 @@
   <!-- Launch the joystick driver -->
   <node name="joystick" pkg="joy" type="joy_node" output="screen" />
 
-  <!-- Launch rviz; TODO add configuration -->
+  <!-- Launch rviz -->
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find orca_topside)/cfg/topside.rviz" output="screen" />
 
 </launch>

@@ -16,6 +16,7 @@
   <buildtool_depend>catkin</buildtool_depend>
 
   <depend>gazebo_ros</depend>
+  <depend>orca_base</depend>
   <depend>orca_msgs</depend>
   <depend>roscpp</depend>
   <depend>rospy</depend>

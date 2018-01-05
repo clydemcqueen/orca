@@ -3,32 +3,17 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "orca_base/orca_base.h"
+#include "orca_base/orca_pwm.h"
 #include "orca_msgs/Control.h"
 
+namespace orca_base {
+
 // Limits
-constexpr double THRUSTER_MIN = -1.0;
-constexpr double THRUSTER_MAX = 1.0;
-constexpr int TILT_MIN = -45;
-constexpr int TILT_MAX = 45;
-constexpr int LIGHTS_MIN = 0;
-constexpr int LIGHTS_MAX = 100;
+constexpr double DEPTH_HOLD_MIN = 0.05; // Hover just below the surface of the water
+constexpr double DEPTH_HOLD_MAX = 50;   // Max depth is 100m, but provide a margin of safety
 
 // Message publish rate in Hz
-constexpr int SPIN_RATE = 10;
-
-template<class T>
-constexpr const T dead_band(const T v, const T d)
-{
-  return v < d && v > -d ? 0 : v;
-}
-
-template<class T>
-constexpr const T clamp(const T v, const T min, const T max)
-{
-  return v > max ? max : (v < min ? min : v);
-}
-
-namespace orca_base {
+constexpr int SPIN_RATE = 50;
 
 struct Thruster
 {
@@ -58,8 +43,8 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   vertical_effort_{0},
   tilt_{0},
   tilt_trim_button_previous_{false},
-  lights_{0},
-  lights_trim_button_previous_{false}
+  brightness_{0},
+  brightness_trim_button_previous_{false}
 {
   nh_priv_.param("joy_axis_yaw", joy_axis_yaw_, 0);                      // Left stick left/right; 1.0 is left and -1.0 is right
   nh_priv_.param("joy_axis_forward", joy_axis_forward_, 1);              // Left stick up/down; 1.0 is forward and -1.0 is backward
@@ -213,28 +198,40 @@ void OrcaBase::publishOdom()
 
 void OrcaBase::publishControl()
 {
-  // Calc thruster efforts. Note that strafe and yaw are THRUSTER_MAX for left, THRUSTER_MIN for right.
+  // Calc thruster efforts. Note that strafe and yaw are THRUST_FULL_FWD for left, THRUST_FULL_REV for right.
   // Order must match the order of the <thruster> tags in the URDF.
   // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
-  orca_msgs::Control control_msg;
-  control_msg.thruster_efforts.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  control_msg.thruster_efforts.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  control_msg.thruster_efforts.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  control_msg.thruster_efforts.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  control_msg.thruster_efforts.push_back(clamp(vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
-  control_msg.thruster_efforts.push_back(clamp(-vertical_effort_, THRUSTER_MIN, THRUSTER_MAX));
+  std::vector<double> efforts = {};
+  efforts.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
+  efforts.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
+  efforts.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
+  efforts.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
+  efforts.push_back(clamp(vertical_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
+  efforts.push_back(clamp(-vertical_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
 
-  // Build rviz markers
-  visualization_msgs::MarkerArray markers_msg;
-  for (int i = 0; i < control_msg.thruster_efforts.size(); ++i)
+  // Publish control message
+  orca_msgs::Control control_msg;
+  control_msg.header.stamp = ros::Time::now();
+  control_msg.mode = mode_;
+  control_msg.camera_tilt_pwm = tilt_to_pwm(tilt_);
+  control_msg.brightness_pwm = brightness_to_pwm(brightness_);
+  for (int i = 0; i < efforts.size(); ++i)
   {
-    int32_t action = control_msg.thruster_efforts[i] == 0.0 ? action = visualization_msgs::Marker::DELETE : action = visualization_msgs::Marker::ADD;
-    double scale = (THRUSTERS[i].ccw ? -control_msg.thruster_efforts[i] : control_msg.thruster_efforts[i]) / 5.0;
+    control_msg.thruster_pwm.push_back(effort_to_pwm(efforts[i]));
+  }
+  control_pub_.publish(control_msg);
+
+  // Publish rviz marker message
+  visualization_msgs::MarkerArray markers_msg;
+  for (int i = 0; i < efforts.size(); ++i)
+  {
+    int32_t action = efforts[i] == 0.0 ? visualization_msgs::Marker::DELETE : visualization_msgs::Marker::ADD;
+    double scale = (THRUSTERS[i].ccw ? -efforts[i] : efforts[i]) / 5.0;
     double offset = scale > 0 ? -0.12 : 0.12;
 
     visualization_msgs::Marker marker;
     marker.header.frame_id = THRUSTERS[i].frame_id;
-    marker.header.stamp = ros::Time();
+    marker.header.stamp = ros::Time::now();
     marker.ns = "thruster";
     marker.id = i;
     marker.type = visualization_msgs::Marker::ARROW;
@@ -255,12 +252,6 @@ void OrcaBase::publishControl()
     marker.color.b = 0.0;
     markers_msg.markers.push_back(marker);
   }
-
-  control_msg.mode = mode_;
-  control_msg.camera_tilt = tilt_;
-  control_msg.brightness = lights_;
-
-  control_pub_.publish(control_msg);
   marker_pub_.publish(markers_msg);
 }
 
@@ -273,7 +264,7 @@ void OrcaBase::setMode(uint8_t mode)
   {
     // Turn on depth pid controller
     std_msgs::Bool enable;
-    enable.data = true;
+    enable.data = static_cast<uint8_t>(true);
     depth_pid_enable_pub_.publish(enable);
     
     // Set target depth
@@ -287,7 +278,7 @@ void OrcaBase::setMode(uint8_t mode)
   {
     // Turn off depth pid controller
     std_msgs::Bool enable;
-    enable.data = false;
+    enable.data = static_cast<uint8_t>(false);
     depth_pid_enable_pub_.publish(enable);
   }
 
@@ -295,7 +286,7 @@ void OrcaBase::setMode(uint8_t mode)
   {
     // Turn on yaw pid controller
     std_msgs::Bool enable;
-    enable.data = true;
+    enable.data = static_cast<uint8_t>(true);
     yaw_pid_enable_pub_.publish(enable);
     
     // Set target angle
@@ -309,7 +300,7 @@ void OrcaBase::setMode(uint8_t mode)
   {
     // Turn off yaw pid controller
     std_msgs::Bool enable;
-    enable.data = false;
+    enable.data = static_cast<uint8_t>(false);
     yaw_pid_enable_pub_.publish(enable);
   }
 
@@ -322,9 +313,6 @@ void OrcaBase::setMode(uint8_t mode)
 // New input from the gamepad
 void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 {
-  constexpr double depth_hold_min = 0.05; // Hover just below the surface of the water
-  constexpr double depth_hold_max = 50;   // Margin of safety
-
   // Arm/disarm
   if (joy_msg->buttons[joy_button_disarm_])
   {
@@ -412,7 +400,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     if (mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd)
     {
       depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
-        depth_hold_min, depth_hold_max);
+        DEPTH_HOLD_MIN, DEPTH_HOLD_MAX);
       publishDepthSetpoint();
     }
 
@@ -438,16 +426,16 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 
   // Lights
-  if ((joy_msg->buttons[joy_button_bright_] || joy_msg->buttons[joy_button_dim_]) && !lights_trim_button_previous_)
+  if ((joy_msg->buttons[joy_button_bright_] || joy_msg->buttons[joy_button_dim_]) && !brightness_trim_button_previous_)
   {
   // Rising edge
-    lights_ = clamp(joy_msg->buttons[joy_button_bright_] ? lights_ + inc_lights_ : lights_ - inc_lights_, LIGHTS_MIN, LIGHTS_MAX);
-    lights_trim_button_previous_ = true;
+    brightness_ = clamp(joy_msg->buttons[joy_button_bright_] ? brightness_ + inc_lights_ : brightness_ - inc_lights_, BRIGHTNESS_MIN, BRIGHTNESS_MAX);
+    brightness_trim_button_previous_ = true;
   }
-  else if (!joy_msg->buttons[joy_button_bright_] && !joy_msg->buttons[joy_button_dim_] && lights_trim_button_previous_)
+  else if (!joy_msg->buttons[joy_button_bright_] && !joy_msg->buttons[joy_button_dim_] && brightness_trim_button_previous_)
   {
     // Falling edge
-    lights_trim_button_previous_ = false;      
+    brightness_trim_button_previous_ = false;
   }
 
   // Thrusters
@@ -501,7 +489,7 @@ int main(int argc, char **argv)
   orca_base::OrcaBase orca_base{nh, nh_priv, tf};
 
   ROS_INFO("Entering main loop");
-  ros::Rate r(SPIN_RATE);
+  ros::Rate r(orca_base::SPIN_RATE);
   while (ros::ok())
   {
     // Do our work

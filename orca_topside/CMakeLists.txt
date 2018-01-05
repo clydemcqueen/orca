@@ -3,13 +3,20 @@ project(orca_topside)
 
 ## Find catkin and everything we need in ROS
 find_package(catkin REQUIRED COMPONENTS
+  orca_base
   orca_msgs
   roscpp
   rviz
 )
 
-## Declare a catkin package
-catkin_package()
+## Declare a catkin package and export dependencies
+catkin_package(
+  CATKIN_DEPENDS
+  orca_base
+  orca_msgs
+  roscpp
+  rospy
+)
 
 ## Set up include directories
 include_directories(include ${catkin_INCLUDE_DIRS})
