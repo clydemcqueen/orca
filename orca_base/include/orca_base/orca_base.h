@@ -59,6 +59,7 @@ private:
   bool yaw_trim_button_previous_;
 
   // Depth pid control state
+  double depth_adjustment_;
   double depth_state_;
   double depth_setpoint_;
   bool depth_trim_button_previous_;

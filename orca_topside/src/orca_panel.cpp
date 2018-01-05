@@ -105,11 +105,7 @@ OrcaPanel::~OrcaPanel()
 
 void OrcaPanel::baroCallback(const orca_msgs::Barometer::ConstPtr &msg)
 {
-  QString depth_string = depth_pid_enabled_ ?
-    QString("Depth %1m (%2)").arg(msg->depth, -1, 'f', 2).arg(depth_setpoint_, -1, 'f', 2) :
-    QString("Depth %1m").arg(msg->depth, -1, 'f', 2);
-
-  depth_viewer_->setText(depth_string);
+  // Prefer tf data over raw pressure reading
   temperature_viewer_->setText(QString("Water temp %1°").arg(msg->temperature));
 }
 
@@ -188,8 +184,20 @@ void OrcaPanel::timerCallback(const ros::TimerEvent &event)
   {
     try
     {
+      // Get odometry data
       tf::StampedTransform transform;
       tfListener->lookupTransform("odom", "base_link", ros::Time(0), transform);
+
+      // Odom depth is based on the Bar30 reading, but it's zeroed out on boot
+      double depth = -transform.getOrigin().getZ();
+
+      QString depth_string = depth_pid_enabled_ ?
+        QString("Depth %1m (%2)").arg(depth, -1, 'f', 2).arg(depth_setpoint_, -1, 'f', 2) :
+        QString("Depth %1m").arg(depth, -1, 'f', 2);
+
+      depth_viewer_->setText(depth_string);
+
+      // Pull out the yaw and compute a compass heading
       tf::Quaternion orientation = transform.getRotation();
       double roll, pitch, yaw;
       tf::Matrix3x3(orientation).getRPY(roll, pitch, yaw);

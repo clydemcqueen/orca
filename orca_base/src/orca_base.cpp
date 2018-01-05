@@ -106,11 +106,17 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
 // New barometer reading
 void OrcaBase::baroCallback(const orca_msgs::Barometer::ConstPtr& baro_msg)
 {
-  depth_state_ = baro_msg->depth;
   if (!barometer_ready_)
   {
+    // First depth reading: zero the depth
+    depth_adjustment_ = baro_msg->depth;
+    depth_state_ = 0;
     barometer_ready_ = true;
-    ROS_INFO("Barometer ready, depth %g", depth_state_);
+    ROS_INFO("Barometer ready, depth adjustment %g", depth_adjustment_);
+  }
+  else
+  {
+    depth_state_ = baro_msg->depth - depth_adjustment_;
   }
 }
 
