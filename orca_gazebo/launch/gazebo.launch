@@ -3,6 +3,8 @@
   <!-- Launch Gazebo with our world file -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find orca_gazebo)/worlds/orca.world" />
+    <arg name="paused" value="true" />
+    <arg name="verbose" value="true" />
   </include>
 
   <!-- Launch Orca nodes -->
