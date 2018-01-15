@@ -22,8 +22,6 @@ namespace gazebo
 // We publish Barometer messages on <ros_topic>.
 // The fluid density is <fluid_density> kg/m^3. Use 997 for freshwater and 1029 for seawater.
 // The model must be spawned at the surface.
-// 
-// TODO: evaluate the noise model
 
 class BarometerPlugin : public SensorPlugin
 {

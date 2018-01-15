@@ -117,8 +117,8 @@ void OrcaPanel::batteryCallback(const orca_msgs::Battery::ConstPtr &msg)
 
 void OrcaPanel::controlCallback(const orca_msgs::Control::ConstPtr &msg)
 {
-  int camera_tilt = orca_base::pwm_to_tilt(msg->camera_tilt_pwm); // TODO types?
-  int brightness = orca_base::pwm_to_brightness(msg->brightness_pwm); // TODO types?
+  int camera_tilt = orca_base::pwm_to_tilt(msg->camera_tilt_pwm);
+  int brightness = orca_base::pwm_to_brightness(msg->brightness_pwm);
   camera_tilt_viewer_->setText(QString("Camera tilt %1°").arg(camera_tilt));
   lights_viewer_->setText(QString("Lights %1\%").arg(brightness));
 
