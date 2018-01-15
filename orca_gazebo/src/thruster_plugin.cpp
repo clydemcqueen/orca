@@ -41,8 +41,6 @@ namespace gazebo
 // 1. Copy/paste the <origin> tags from each thruster <joint> tag to the <thruster> tag. (implemented)
 // 2. Use non-fixed joints with motion limits. (not implemented)
 // 3. Use the <dontcollapsejoints> tag. (not implemented; appears to require SDF 2.0)
-//
-// TODO: support nonlinear force curves, e.g., http://docs.bluerobotics.com/thrusters/t200/
 
 class ThrusterPlugin : public ModelPlugin
 {
@@ -78,20 +76,20 @@ private:
   };
 
   // Our array of thrusters
-  std::vector<Thruster> thrusters_ = {};  
+  std::vector<Thruster> thrusters_ = {};
 
   // ROS helper function that processes messages.
   void QueueThread()
   {
     ROS_INFO("ROS queue thread running");
-    
+
     static const double timeout = 0.01;
     while (nh_->ok())
     {
       callback_queue_.callAvailable(ros::WallDuration(timeout));
     }
   }
-  
+
 public:
 
   // Called once when the plugin is loaded.
@@ -179,7 +177,7 @@ public:
       // Rotate force into place on the frame
       gazebo::math::Quaternion q = {t.rpy};
       force = q.RotateVector(force);
-      
+
       // Match base_link's current pose
       force = base_link_->GetWorldPose().rot.RotateVector(force);
 
