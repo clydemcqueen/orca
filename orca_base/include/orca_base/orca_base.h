@@ -106,6 +106,8 @@ private:
   // Helpers
   void publishYawSetpoint();
   void publishDepthSetpoint();
+  void publishYawPidEnable(bool enable);
+  void publishDepthPidEnable(bool enable);
   void publishControl();
   void publishOdom();
   void setMode(uint8_t mode);

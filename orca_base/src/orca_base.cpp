@@ -13,7 +13,7 @@ constexpr double DEPTH_HOLD_MIN = 0.05; // Hover just below the surface of the w
 constexpr double DEPTH_HOLD_MAX = 50;   // Max depth is 100m, but provide a margin of safety
 
 // Message publish rate in Hz
-constexpr int SPIN_RATE = 50;
+constexpr int SPIN_RATE = 10;
 
 struct Thruster
 {
@@ -71,7 +71,6 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_priv_.param("input_dead_band", input_dead_band_, 0.05f);            // Don't respond to tiny joystick movements
   nh_priv_.param("effort_dead_band", effort_dead_band_, 0.005);          // Don't publish tiny thruster efforts
 
-  // TODO simulate a rotated imu and remove this hack
   nh_priv_.param("simulation", simulation_, true);
   if (simulation_)
   {
@@ -79,7 +78,6 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   }
   else
   {
-    // TODO listen for this transform
     tf2::Quaternion imu_orientation;
     imu_orientation.setRPY(-M_PI/2, -M_PI/2, 0);
     imu_rotation_ =  imu_orientation.inverse();
@@ -101,6 +99,10 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   depth_pid_enable_pub_ = nh_priv_.advertise<std_msgs::Bool>("/depth_pid/pid_enable", 1);
   depth_state_pub_ = nh_priv_.advertise<std_msgs::Float64>("/depth_pid/state", 1);
   depth_setpoint_pub_ = nh_priv_.advertise<std_msgs::Float64>("/depth_pid/setpoint", 1);
+
+  // Disable pid controllers
+  publishYawPidEnable(false);
+  publishDepthPidEnable(false);
 }
 
 // New barometer reading
@@ -129,7 +131,6 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   if (simulation_)
   {
     // Gazebo IMU noise model might result in non-normalized Quaternion
-    // TODO fix simulation
     imu_orientation = imu_orientation.normalize();
   }
   base_orientation_ = imu_orientation * imu_rotation_;
@@ -185,6 +186,20 @@ void OrcaBase::publishDepthSetpoint()
   }
 }
 
+void OrcaBase::publishYawPidEnable(bool enable)
+{
+  std_msgs::Bool msg_enable;
+  msg_enable.data = static_cast<uint8_t>(enable);
+  yaw_pid_enable_pub_.publish(msg_enable);
+}
+
+void OrcaBase::publishDepthPidEnable(bool enable)
+{
+  std_msgs::Bool msg_enable;
+  msg_enable.data = static_cast<uint8_t>(enable);
+  depth_pid_enable_pub_.publish(msg_enable);
+}
+
 void OrcaBase::publishOdom()
 {
   if (imu_ready_ && barometer_ready_)
@@ -233,7 +248,7 @@ void OrcaBase::publishControl()
   {
     int32_t action = efforts[i] == 0.0 ? visualization_msgs::Marker::DELETE : visualization_msgs::Marker::ADD;
     double scale = (THRUSTERS[i].ccw ? -efforts[i] : efforts[i]) / 5.0;
-    double offset = scale > 0 ? -0.12 : 0.12;
+    double offset = scale > 0 ? -0.1 : 0.1;
 
     visualization_msgs::Marker marker;
     marker.header.frame_id = THRUSTERS[i].frame_id;
@@ -268,14 +283,12 @@ void OrcaBase::setMode(uint8_t mode)
 
   if (mode == orca_msgs::Control::hold_d || mode == orca_msgs::Control::hold_hd)
   {
-    // Turn on depth pid controller
-    std_msgs::Bool enable;
-    enable.data = static_cast<uint8_t>(true);
-    depth_pid_enable_pub_.publish(enable);
-    
     // Set target depth
     depth_setpoint_ = depth_state_;
     publishDepthSetpoint();
+
+    // Turn on depth pid controller
+    publishDepthPidEnable(true);
 
     // Clear button state
     depth_trim_button_previous_ = false;
@@ -283,21 +296,17 @@ void OrcaBase::setMode(uint8_t mode)
   else
   {
     // Turn off depth pid controller
-    std_msgs::Bool enable;
-    enable.data = static_cast<uint8_t>(false);
-    depth_pid_enable_pub_.publish(enable);
+    publishDepthPidEnable(false);
   }
 
   if (mode == orca_msgs::Control::hold_h || mode == orca_msgs::Control::hold_hd)
   {
-    // Turn on yaw pid controller
-    std_msgs::Bool enable;
-    enable.data = static_cast<uint8_t>(true);
-    yaw_pid_enable_pub_.publish(enable);
-    
     // Set target angle
     yaw_setpoint_ = yaw_state_;
     publishYawSetpoint();
+
+    // Turn on yaw pid controller
+    publishYawPidEnable(true);
 
     // Clear button state
     yaw_trim_button_previous_ = false;
@@ -305,9 +314,7 @@ void OrcaBase::setMode(uint8_t mode)
   else
   {
     // Turn off yaw pid controller
-    std_msgs::Bool enable;
-    enable.data = static_cast<uint8_t>(false);
-    yaw_pid_enable_pub_.publish(enable);
+    publishYawPidEnable(false);
   }
 
   if (mode == orca_msgs::Control::disarmed)
@@ -460,7 +467,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 // Publish various messages
 void OrcaBase::spinOnce()
 {
-  // Set target yaw
+  // Publish yaw state
   if (mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd)
   {
     std_msgs::Float64 yaw_state;
@@ -468,7 +475,7 @@ void OrcaBase::spinOnce()
     yaw_state_pub_.publish(yaw_state);
   }
 
-  // Set target depth
+  // Publis depth state
   if (mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd)
   {
     std_msgs::Float64 depth_state;
