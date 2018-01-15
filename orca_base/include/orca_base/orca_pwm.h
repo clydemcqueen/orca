@@ -94,7 +94,7 @@ constexpr const uint16_t effort_to_pwm(const double effort)
 
 constexpr const double pwm_to_effort(const uint16_t pwm)
 {
-  return static_cast<double>(pwm - THRUST_STOP_PWM + (pwm > THRUST_STOP_PWM ? THRUST_DZ_PWM : (pwm < THRUST_STOP_PWM ? -THRUST_DZ_PWM : 0))) / THRUST_RANGE_PWM;
+  return static_cast<double>(pwm - THRUST_STOP_PWM + (pwm > THRUST_STOP_PWM ? -THRUST_DZ_PWM : (pwm < THRUST_STOP_PWM ? THRUST_DZ_PWM : 0))) / THRUST_RANGE_PWM;
 }
 
 } // namespace orca_base
