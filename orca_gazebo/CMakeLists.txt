@@ -32,6 +32,10 @@ link_directories(${GAZEBO_LIBRARY_DIRS})
 ## Require C++14
 add_compile_options(-std=c++14)
 
+add_library(DragPlugin src/drag_plugin.cpp)
+add_dependencies(DragPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(DragPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
 add_library(ThrusterPlugin src/thruster_plugin.cpp)
 add_dependencies(ThrusterPlugin ${catkin_EXPORTED_TARGETS})
 target_link_libraries(ThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
