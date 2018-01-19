@@ -6,7 +6,6 @@
 #include <thread>
 #include <ros/ros.h>
 #include "ros/callback_queue.h"
-#include "ros/subscribe_options.h"
 
 #include "orca_base/orca_pwm.h"
 #include "orca_msgs/Control.h"
@@ -14,33 +13,39 @@
 namespace gazebo
 {
 
-// A very simple thruster plugin. Usage:
-//
-//    <gazebo>
-//      <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so"> 
-//        <ros_topic>/thruster</ros_topic>
-//        <thruster>
-//          <force>50</force>
-//          <origin xyz="0.1 0.15 0" rpy="0 ${PI/2} ${PI*3/4}"/>
-//        </thruster>
-//      </plugin>
-//    </gazebo>
-//
-// We listen for ROS Thruster messages and apply thrust forces to base_link.
-//
-// There can the multiple <thruster> tags; the number and order of <thruster> tags must match
-// the number and order of int32s in the Thruster message. Each int32 indicates ESC pulse width and
-// ranges from 1100 (full reverse) through 1500 (stop) to 1900 (full forward).
-//
-//    <ros_topic> specifics the topic for Thruster messages. Default is /thrusters.
-//    <force> specifies force generated this thruster in Newtons. Default is 50N. Use negative force for clockwise spin.
-//    <origin> specifies thruster pose relative to base_link. Default is 0, 0, 0, 0, 0, 0.
-//
-// Note: the ROS URDF to SDF translation drops all fixed joints, collapsing all links into a single link.
-// There are several possible workarounds:
-// 1. Copy/paste the <origin> tags from each thruster <joint> tag to the <thruster> tag. (implemented)
-// 2. Use non-fixed joints with motion limits. (not implemented)
-// 3. Use the <dontcollapsejoints> tag. (not implemented; appears to require SDF 2.0)
+/* A simple thruster plugin. Usage:
+ *
+ *    <gazebo>
+ *      <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so">
+ *        <ros_topic>/control</ros_topic>
+ *        <thruster>
+ *          <pos_force>50</pos_force>
+ *          <neg_force>50</neg_force>
+ *          <origin xyz="0.1 0.15 0" rpy="0 ${PI/2} ${PI*3/4}"/>
+ *        </thruster>
+ *      </plugin>
+ *    </gazebo>
+ *
+ * We listen for Orca Control messages and apply thrust forces to base_link.
+ *
+ * There can the multiple <thruster> tags; the number and order of <thruster> tags must match
+ * the number and order of int32s in the Control message. Each int32 indicates ESC pulse width and
+ * ranges from 1100 (full reverse) through 1500 (stop) to 1900 (full forward).
+ *
+ *    <ros_topic> topic for Control messages. Default is /control.
+ *    <pos_force> force (N) with max positive effort (pwm=1900). Default 110. Use negative if prop is reversed.
+ *    <neg_force> force (N) with max negative effort (pwm=1100). Default is 88. Use negative if prop is reversed.
+ *    <origin> thruster pose relative to base_link. Default is 0, 0, 0, 0, 0, 0.
+ *
+ * Note: the ROS URDF to SDF translation drops all fixed joints, collapsing all links into a single link.
+ * There are several possible workarounds:
+ * 1. Copy/paste the <origin> tags from each thruster <joint> tag to the <thruster> tag.
+ * 2. Use non-fixed joints with motion limits.
+ * 3. Use the <dontcollapsejoints> tag. (appears to require SDF 2.0)
+ */
+
+constexpr double T200_MAX_POS_FORCE = 110;
+constexpr double T200_MAX_NEG_FORCE = 88;
 
 class ThrusterPlugin : public ModelPlugin
 {
@@ -69,7 +74,8 @@ private:
     // Specified in the SDF, and doesn't change:
     gazebo::math::Vector3 xyz;
     gazebo::math::Vector3 rpy;
-    double force; // Newtons, use negative numbers for clockwise spin
+    double pos_force;
+    double neg_force;
 
     // From the latest ROS message:
     double effort; // Range -1.0 to 1.0
@@ -128,11 +134,17 @@ public:
     for (sdf::ElementPtr elem = sdf->GetElement("thruster"); elem; elem = elem->GetNextElement("thruster"))
     {
       Thruster t = {};
+      t.pos_force = T200_MAX_POS_FORCE;
+      t.neg_force = T200_MAX_NEG_FORCE;
 
-      t.force = 50;
-      if (elem->HasElement("force"))
+      if (elem->HasElement("pos_force"))
       {
-        t.force = elem->GetElement("force")->Get<double>();
+        t.pos_force = elem->GetElement("pos_force")->Get<double>();
+      }
+
+      if (elem->HasElement("neg_force"))
+      {
+        t.neg_force = elem->GetElement("neg_force")->Get<double>();
       }
 
       if (elem->HasElement("origin"))
@@ -149,7 +161,7 @@ public:
         }
       }
 
-      ROS_INFO("Thruster force %g xyz {%g, %g, %g} rpy {%g, %g, %g}", t.force, t.xyz.x, t.xyz.y, t.xyz.z, t.rpy.x, t.rpy.y, t.rpy.z);
+      ROS_INFO("Thruster pos %g neg %g xyz {%g, %g, %g} rpy {%g, %g, %g}", t.pos_force, t.neg_force, t.xyz.x, t.xyz.y, t.xyz.z, t.rpy.x, t.rpy.y, t.rpy.z);
       thrusters_.push_back(t);
     }
 
@@ -172,7 +184,7 @@ public:
     for (Thruster t : thrusters_)
     {
       // Default thruster force points directly up
-      gazebo::math::Vector3 force = {0.0, 0.0, t.effort * t.force};
+      gazebo::math::Vector3 force = {0.0, 0.0, t.effort * (t.effort < 0 ? t.neg_force : t.pos_force)};
 
       // Rotate force into place on the frame
       gazebo::math::Quaternion q = {t.rpy};

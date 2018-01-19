@@ -15,11 +15,13 @@
   <xacro:property name="FLOAT_Z" value="0.07"/>
   <xacro:property name="THRUSTER_X" value="0.15"/>
   <xacro:property name="THRUSTER_Y" value="0.09"/>
-  <xacro:property name="THRUSTER_Z" value="-0.012"/>
+  <xacro:property name="THRUSTER_Z" value="-0.009"/>
   <xacro:property name="VERT_THRUSTER_Y" value="0.105"/>
   <xacro:property name="VERT_THRUSTER_Z" value="0.09"/>
-  <xacro:property name="BUOYANCY" value="0.1"/>
-  <xacro:property name="MASS_Z" value="-0.08"/>
+  <xacro:property name="BUOYANCY" value="0.09"/>
+  <xacro:property name="MASS_Z" value="0.011"/>
+  <xacro:property name="FORWARD_FORCE" value="110"/>
+  <xacro:property name="REVERSE_FORCE" value="88"/>
 
   <!-- Physics properties -->
   <xacro:property name="FLUID_DENSITY" value="1029"/>
@@ -158,7 +160,7 @@
     <plugin name="BuoyancyPlugin" filename="libBuoyancyPlugin.so">
       <fluid_density>${FLUID_DENSITY}</fluid_density>
       <link name="base_link">
-        <center_of_volume>0 0 0.05</center_of_volume>
+        <center_of_volume>0 0 0.06</center_of_volume>
         <volume>${TOTAL_MASS / FLUID_DENSITY}</volume>
       </link>
     </plugin>
@@ -171,6 +173,8 @@
     <plugin name="DragPlugin" filename="libDragPlugin.so">
       <link name="base_link">
         <center_of_mass>0 0 ${MASS_Z}</center_of_mass>
+        <tether_attach>-0.25 0 ${THRUSTER_Z}</tether_attach>
+        <surface>10</surface>
       </link>
     </plugin>
   </gazebo>
@@ -183,27 +187,33 @@
     <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so">
       <ros_topic>/orca_base/control</ros_topic>
       <thruster name="front_right"> <!-- name attributes are ignored; the tag order must match the message array order -->
-        <force>50</force> <!-- units are N, positive for ccw, negative for cw -->
+        <pos_force>${FORWARD_FORCE}</pos_force> <!-- units are N, positive for ccw, negative for cw -->
+        <neg_force>${REVERSE_FORCE}</neg_force> <!-- units are N, positive for ccw, negative for cw -->
         <xacro:insert_block name="front_right_origin"/>
       </thruster>
       <thruster name="front_left">
-        <force>50</force>
+        <pos_force>${FORWARD_FORCE}</pos_force>
+        <neg_force>${REVERSE_FORCE}</neg_force>
         <xacro:insert_block name="front_left_origin"/>
       </thruster>
       <thruster name="rear_right">
-        <force>-50</force> <!-- cw -->
+        <pos_force>${-REVERSE_FORCE}</pos_force>
+        <neg_force>${-FORWARD_FORCE}</neg_force>
         <xacro:insert_block name="rear_right_origin"/>
       </thruster>
       <thruster name="rear_left">
-        <force>-50</force> <!-- cw -->
+        <pos_force>${-REVERSE_FORCE}</pos_force>
+        <neg_force>${-FORWARD_FORCE}</neg_force>
         <xacro:insert_block name="rear_left_origin"/>
       </thruster>
       <thruster name="vertical_right">
-        <force>50</force>
+        <pos_force>${FORWARD_FORCE}</pos_force>
+        <neg_force>${REVERSE_FORCE}</neg_force>
         <xacro:insert_block name="vertical_right_origin"/>
       </thruster>
       <thruster name="vertical_left">
-        <force>-50</force> <!-- cw -->
+        <pos_force>${-REVERSE_FORCE}</pos_force>
+        <neg_force>${-FORWARD_FORCE}</neg_force>
         <xacro:insert_block name="vertical_left_origin"/>
       </thruster>
     </plugin>
