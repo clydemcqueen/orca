@@ -2,15 +2,8 @@
 
   <arg name="simulation" default="true" />
 
-  <!-- Filepath for the robot description file; can be overridden -->
-  <arg name="model" default="$(find orca_description)/urdf/orca.urdf.xacro" />
-
-  <!-- Open the URDF, run the xacro preprocessor, and stuff the result into 'robot_description' on the parameter server -->
-  <param name="robot_description" command="$(find xacro)/xacro --inorder $(arg model)" />
-
-  <!-- Launch some state publishers -->
-  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" output="log" />
-  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="log" />
+  <!-- Load robot description and launch robot and state publishers -->
+  <include file="$(find orca_description)/launch/description.launch" />
 
   <!-- Launch orca_base -->
   <node name="orca_base" pkg="orca_base" type="orca_base" output="log">
@@ -22,11 +15,12 @@
   <node name="yaw_pid" pkg="pid" type="controller" output="log">
     <param name="node_name" value="yaw_pid_node" />
     <param name="angle_error" value="true" /> <!-- Treat control variable as an angle in radians -->
-    <param name="Kp" value="0.1" />
-    <param name="Ki" value="0.0" />
-    <param name="Kd" value="0.0" />
-    <param name="upper_limit" value="0.2" />
-    <param name="lower_limit" value="-0.2" />
+    <param name="Kp" value="0.038" />
+    <param name="Ki" value="0.001" />
+    <param name="Kd" value="0.001" />
+    <param name="upper_limit" value="0.3" />
+    <param name="lower_limit" value="-0.3" />
+    <param name="windup_limit" value="0.3" />
     <remap from="pid_enable" to="/yaw_pid/pid_enable" />
     <remap from="state" to="/yaw_pid/state" />
     <remap from="setpoint" to="/yaw_pid/setpoint" />
@@ -36,11 +30,12 @@
   <!-- Launch the depth pid controller -->
   <node name="depth_pid" pkg="pid" type="controller" output="log">
     <param name="node_name" value="depth_pid_node"/>
-    <param name="Kp" value="0.1" />
-    <param name="Ki" value="0.03" />
-    <param name="Kd" value="0.1" />
-    <param name="upper_limit" value="0.2" />
-    <param name="lower_limit" value="-0.2" />
+    <param name="Kp" value="0.017" />
+    <param name="Ki" value="0.014" />
+    <param name="Kd" value="0.015" />
+    <param name="upper_limit" value="0.3" />
+    <param name="lower_limit" value="-0.3" />
+    <param name="windup_limit" value="0.3" />
     <remap from="pid_enable" to="/depth_pid/pid_enable" />
     <remap from="state" to="/depth_pid/state" />
     <remap from="setpoint" to="/depth_pid/setpoint" />

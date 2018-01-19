@@ -6,7 +6,8 @@
   <!-- Open the URDF, run the xacro preprocessor, and stuff the result into 'robot_description' on the parameter server -->
   <param name="robot_description" command="$(find xacro)/xacro --inorder $(arg model)" />
 
-  <!-- Launch the robot state publisher -->
+  <!-- Launch some state publishers -->
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" output="log" />
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="log" />
 
 </launch>

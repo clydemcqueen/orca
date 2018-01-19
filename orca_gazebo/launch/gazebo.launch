@@ -16,4 +16,7 @@
   <!-- Run the gazebo model spawner; it will turn URDF into SDF and inject the model into the running world -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -z 10 -model orca" output="screen" />
 
+  <!-- Launch multiplot -->
+  <node name="rqt_multiplot" pkg="rqt_multiplot" type="rqt_multiplot" />
+
 </launch>
