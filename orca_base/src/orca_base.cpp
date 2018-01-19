@@ -4,7 +4,6 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "orca_base/orca_base.h"
 #include "orca_base/orca_pwm.h"
-#include "orca_msgs/Control.h"
 
 namespace orca_base {
 
@@ -19,15 +18,20 @@ struct Thruster
 {
   std::string frame_id;   // URDF link frame id
   bool ccw;               // True if counterclockwise
+  double forward_factor;
+  double strafe_factor;
+  double yaw_factor;
+  double vertical_factor;
 };
 
+// Order must match the order of the <thruster> tags in the URDF
 const std::vector<Thruster> THRUSTERS = {
-  {"t200_link_front_right", false},
-  {"t200_link_front_left", false},
-  {"t200_link_rear_right", true},
-  {"t200_link_rear_left", true},
-  {"t200_link_vertical_right", false},
-  {"t200_link_vertical_left", true},
+  {"t200_link_front_right", false, 1.0, 1.0, 1.0, 0.0},
+  {"t200_link_front_left", false, 1.0, -1.0, -1.0, 0.0},
+  {"t200_link_rear_right", true, 1.0, -1.0, 1.0, 0.0},
+  {"t200_link_rear_left", true, 1.0, 1.0, -1.0, 0.0},
+  {"t200_link_vertical_right", false, 0.0, 0.0, 0.0, 1.0},
+  {"t200_link_vertical_left", true, 0.0, 0.0, 0.0, -1.0},
 };
 
 OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf):
@@ -41,6 +45,9 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   yaw_effort_{0},
   strafe_effort_{0},
   vertical_effort_{0},
+  xy_gain_ {0.5},
+  yaw_gain_ {0.5},
+  vertical_gain_ {0.5},
   tilt_{0},
   tilt_trim_button_previous_{false},
   brightness_{0},
@@ -151,7 +158,7 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 // Result of yaw pid controller
 void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
-  if (mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd)
+  if (holdingHeading())
   {
     yaw_effort_ = dead_band(msg->data * stability_, effort_dead_band_);
   }
@@ -160,7 +167,7 @@ void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 // Result of depth pid controller
 void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
-  if (mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd)
+  if (holdingDepth())
   {
     vertical_effort_ = dead_band(-msg->data * stability_, effort_dead_band_);
   }
@@ -219,16 +226,18 @@ void OrcaBase::publishOdom()
 
 void OrcaBase::publishControl()
 {
-  // Calc thruster efforts. Note that strafe and yaw are THRUST_FULL_FWD for left, THRUST_FULL_REV for right.
-  // Order must match the order of the <thruster> tags in the URDF.
-  // 3 of the thrusters spin cw, and 3 spin ccw; see URDF for details.
-  std::vector<double> efforts = {};
-  efforts.push_back(clamp(forward_effort_ + strafe_effort_ + yaw_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
-  efforts.push_back(clamp(forward_effort_ - strafe_effort_ - yaw_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
-  efforts.push_back(clamp(forward_effort_ - strafe_effort_ + yaw_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
-  efforts.push_back(clamp(forward_effort_ + strafe_effort_ - yaw_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
-  efforts.push_back(clamp(vertical_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
-  efforts.push_back(clamp(-vertical_effort_, THRUST_FULL_REV, THRUST_FULL_FWD));
+  // Combine joystick efforts to get thruster efforts.
+  std::vector<double> thruster_efforts = {};
+  for (int i = 0; i < THRUSTERS.size(); ++i)
+  {
+    // Clamp forward + strafe to xy_gain_
+    double xy_effort = clamp(forward_effort_ * THRUSTERS[i].forward_factor + strafe_effort_ * THRUSTERS[i].strafe_factor,
+      -xy_gain_, xy_gain_);
+
+    // Clamp total thrust
+    thruster_efforts.push_back(clamp(xy_effort + yaw_effort_ * THRUSTERS[i].yaw_factor + vertical_effort_ * THRUSTERS[i].vertical_factor,
+      THRUST_FULL_REV, THRUST_FULL_FWD));
+  }
 
   // Publish control message
   orca_msgs::Control control_msg;
@@ -236,18 +245,18 @@ void OrcaBase::publishControl()
   control_msg.mode = mode_;
   control_msg.camera_tilt_pwm = tilt_to_pwm(tilt_);
   control_msg.brightness_pwm = brightness_to_pwm(brightness_);
-  for (int i = 0; i < efforts.size(); ++i)
+  for (int i = 0; i < thruster_efforts.size(); ++i)
   {
-    control_msg.thruster_pwm.push_back(effort_to_pwm(efforts[i]));
+    control_msg.thruster_pwm.push_back(effort_to_pwm(thruster_efforts[i]));
   }
   control_pub_.publish(control_msg);
 
   // Publish rviz marker message
   visualization_msgs::MarkerArray markers_msg;
-  for (int i = 0; i < efforts.size(); ++i)
+  for (int i = 0; i < thruster_efforts.size(); ++i)
   {
-    int32_t action = efforts[i] == 0.0 ? visualization_msgs::Marker::DELETE : visualization_msgs::Marker::ADD;
-    double scale = (THRUSTERS[i].ccw ? -efforts[i] : efforts[i]) / 5.0;
+    int32_t action = thruster_efforts[i] == 0.0 ? visualization_msgs::Marker::DELETE : visualization_msgs::Marker::ADD;
+    double scale = (THRUSTERS[i].ccw ? -thruster_efforts[i] : thruster_efforts[i]) / 5.0;
     double offset = scale > 0 ? -0.1 : 0.1;
 
     visualization_msgs::Marker marker;
@@ -281,7 +290,7 @@ void OrcaBase::setMode(uint8_t mode)
 {
   mode_ = mode;  
 
-  if (mode == orca_msgs::Control::hold_d || mode == orca_msgs::Control::hold_hd)
+  if (holdingDepth())
   {
     // Set target depth
     depth_setpoint_ = depth_state_;
@@ -299,7 +308,7 @@ void OrcaBase::setMode(uint8_t mode)
     publishDepthPidEnable(false);
   }
 
-  if (mode == orca_msgs::Control::hold_h || mode == orca_msgs::Control::hold_hd)
+  if (holdingHeading())
   {
     // Set target angle
     yaw_setpoint_ = yaw_state_;
@@ -392,7 +401,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if (joy_msg->axes[joy_axis_yaw_trim_] != 0.0 && !yaw_trim_button_previous_)
   {
     // Rising edge
-    if ((mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd))
+    if ((holdingHeading()))
     {
       yaw_setpoint_ = joy_msg->axes[joy_axis_yaw_trim_] > 0.0 ? yaw_setpoint_ + inc_yaw_ : yaw_setpoint_ - inc_yaw_;
       publishYawSetpoint();
@@ -410,7 +419,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   if (joy_msg->axes[joy_axis_vertical_trim_] != 0.0 && !depth_trim_button_previous_)
   {
     // Rising edge
-    if (mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd)
+    if (holdingDepth())
     {
       depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
         DEPTH_HOLD_MIN, DEPTH_HOLD_MAX);
@@ -452,15 +461,15 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 
   // Thrusters
-  forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_);
-  if (mode_ == orca_msgs::Control::manual || mode_ == orca_msgs::Control::hold_d)
+  forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
+  if (!holdingHeading())
   {
-    yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_);
+    yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
   }
-  strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_);
-  if (mode_ == orca_msgs::Control::manual || mode_ == orca_msgs::Control::hold_h)
+  strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
+  if (!holdingDepth())
   {
-    vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_);
+    vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
   }
 }
 
@@ -468,15 +477,15 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 void OrcaBase::spinOnce()
 {
   // Publish yaw state
-  if (mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd)
+  if (holdingHeading())
   {
     std_msgs::Float64 yaw_state;
     yaw_state.data = yaw_state_;
     yaw_state_pub_.publish(yaw_state);
   }
 
-  // Publis depth state
-  if (mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd)
+  // Publish depth state
+  if (holdingDepth())
   {
     std_msgs::Float64 depth_state;
     depth_state.data = depth_state_;

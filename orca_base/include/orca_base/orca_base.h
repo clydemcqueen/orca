@@ -9,6 +9,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 #include "orca_msgs/Barometer.h"
+#include "orca_msgs/Control.h"
 
 namespace orca_base {
 
@@ -63,7 +64,12 @@ private:
   double depth_state_;
   double depth_setpoint_;
   bool depth_trim_button_previous_;
-  
+
+  // Joystick gain (attenuation), range 0.0 (ignore joystick) to 1.0 (no attenuation)
+  double xy_gain_;
+  double yaw_gain_;
+  double vertical_gain_;
+
   // Thruster effort from joystick or pid controllers (yaw and depth), ranges from 1.0 for forward to -1.0 for reverse
   double forward_effort_;
   double yaw_effort_;
@@ -111,7 +117,9 @@ private:
   void publishControl();
   void publishOdom();
   void setMode(uint8_t mode);
-  
+  bool holdingHeading() { return mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd; };
+  bool holdingDepth() { return mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd; };
+
 public:
   explicit OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf);
   ~OrcaBase() {}; // Suppress default copy and move constructors
