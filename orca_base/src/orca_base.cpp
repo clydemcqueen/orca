@@ -145,6 +145,10 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   double roll, pitch;
   tf2::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
 
+  // NWU to ENU
+  yaw_state_ += M_PI_2;
+  base_orientation_.setRPY(roll, pitch, yaw_state_);
+
   // Compute a stability metric, used to throttle the pid controllers
   stability_ = std::min(clamp(std::cos(roll), 0.0, 1.0), clamp(std::cos(pitch), 0.0, 1.0));
 
