@@ -8,19 +8,19 @@
   <!-- Launch orca_base -->
   <node name="orca_base" pkg="orca_base" type="orca_base" output="log">
     <param name="simulation" value="$(arg simulation)" />
-    <param name="effort_dead_band" value="0.0001" />
+    <param name="effort_dead_band" value="0.0005" />
   </node>
 
   <!-- Launch the yaw pid controller -->
   <node name="yaw_pid" pkg="pid" type="controller" output="log">
     <param name="node_name" value="yaw_pid_node" />
     <param name="angle_error" value="true" /> <!-- Treat control variable as an angle in radians -->
-    <param name="Kp" value="0.038" />
-    <param name="Ki" value="0.001" />
-    <param name="Kd" value="0.001" />
-    <param name="upper_limit" value="0.3" />
-    <param name="lower_limit" value="-0.3" />
-    <param name="windup_limit" value="0.3" />
+    <param name="Kp" value="0.007" />
+    <param name="Ki" value="0.0" />
+    <param name="Kd" value="0.0" />
+    <param name="upper_limit" value="0.1" />
+    <param name="lower_limit" value="-0.1" />
+    <param name="windup_limit" value="0.1" />
     <remap from="pid_enable" to="/yaw_pid/pid_enable" />
     <remap from="state" to="/yaw_pid/state" />
     <remap from="setpoint" to="/yaw_pid/setpoint" />
@@ -30,12 +30,12 @@
   <!-- Launch the depth pid controller -->
   <node name="depth_pid" pkg="pid" type="controller" output="log">
     <param name="node_name" value="depth_pid_node"/>
-    <param name="Kp" value="0.017" />
-    <param name="Ki" value="0.014" />
-    <param name="Kd" value="0.015" />
-    <param name="upper_limit" value="0.3" />
-    <param name="lower_limit" value="-0.3" />
-    <param name="windup_limit" value="0.3" />
+    <param name="Kp" value="0.1" />
+    <param name="Ki" value="0.0" />
+    <param name="Kd" value="0.05" />
+    <param name="upper_limit" value="0.1" />
+    <param name="lower_limit" value="-0.1" />
+    <param name="windup_limit" value="0.1" />
     <remap from="pid_enable" to="/depth_pid/pid_enable" />
     <remap from="state" to="/depth_pid/state" />
     <remap from="setpoint" to="/depth_pid/setpoint" />
