@@ -45,13 +45,11 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   yaw_effort_{0},
   strafe_effort_{0},
   vertical_effort_{0},
-  xy_gain_ {0.5},
-  yaw_gain_ {0.5},
-  vertical_gain_ {0.5},
   tilt_{0},
   tilt_trim_button_previous_{false},
   brightness_{0},
-  brightness_trim_button_previous_{false}
+  brightness_trim_button_previous_{false},
+  ping_time_{ros::Time::now()}
 {
   nh_priv_.param("joy_axis_yaw", joy_axis_yaw_, 0);                      // Left stick left/right; 1.0 is left and -1.0 is right
   nh_priv_.param("joy_axis_forward", joy_axis_forward_, 1);              // Left stick up/down; 1.0 is forward and -1.0 is backward
@@ -77,6 +75,9 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_priv_.param("inc_lights", inc_lights_, 20);
   nh_priv_.param("input_dead_band", input_dead_band_, 0.05f);            // Don't respond to tiny joystick movements
   nh_priv_.param("effort_dead_band", effort_dead_band_, 0.005);          // Don't publish tiny thruster efforts
+  nh_priv_.param("xy_gain", xy_gain_, 0.5);
+  nh_priv_.param("yaw_gain", yaw_gain_, 0.2);
+  nh_priv_.param("vertical_gain", vertical_gain_, 0.5);
 
   nh_priv_.param("simulation", simulation_, true);
   if (simulation_)
@@ -96,6 +97,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   joy_sub_ = nh_priv_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   yaw_control_effort_sub_ = nh_priv_.subscribe<std_msgs::Float64>("/yaw_pid/control_effort", 10, &OrcaBase::yawControlEffortCallback, this);
   depth_control_effort_sub_ = nh_priv_.subscribe<std_msgs::Float64>("/depth_pid/control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
+  ping_sub_ = nh_priv_.subscribe<std_msgs::Empty>("/ping", 10, &OrcaBase::pingCallback, this);
 
   // Advertise all topics that we'll publish on
   control_pub_ = nh_priv_.advertise<orca_msgs::Control>("control", 1);
@@ -175,6 +177,12 @@ void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg
   {
     vertical_effort_ = dead_band(-msg->data * stability_, effort_dead_band_);
   }
+}
+
+// Ping from topside
+void OrcaBase::pingCallback(const std_msgs::Empty::ConstPtr& msg)
+{
+  ping_time_ = ros::Time::now();
 }
 
 void OrcaBase::publishYawSetpoint()
@@ -332,13 +340,16 @@ void OrcaBase::setMode(uint8_t mode)
 
   if (mode == orca_msgs::Control::disarmed)
   {
-    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = 0.0;
+    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = brightness_ = 0.0;
   }
 }
 
 // New input from the gamepad
 void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 {
+  // A joystick message means that we're talking to the topside
+  ping_time_ = ros::Time::now();
+
   // Arm/disarm
   if (joy_msg->buttons[joy_button_disarm_])
   {
@@ -477,9 +488,16 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 }
 
-// Publish various messages
+// Our main loop
 void OrcaBase::spinOnce()
 {
+  // If we're not getting messages from the topside, disarm and wait
+  if (ros::Time::now() - ping_time_ > ros::Duration(5.0) && mode_ != orca_msgs::Control::disarmed)
+  {
+    ROS_ERROR("Lost contact with topside; disarming");
+    setMode(orca_msgs::Control::disarmed);
+  }
+
   // Publish yaw state
   if (holdingHeading())
   {

@@ -53,6 +53,7 @@ private:
   bool barometer_ready_;              // True if we've received at least one barometer message
   tf2::Quaternion base_orientation_;  // Current orientation
   double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
+  ros::Time ping_time_;               // Last time we heard from the topside
 
   // Yaw pid control state
   double yaw_state_;
@@ -90,6 +91,7 @@ private:
   ros::Subscriber yaw_control_effort_sub_;
   ros::Subscriber depth_control_effort_sub_;
   ros::Subscriber joy_sub_;
+  ros::Subscriber ping_sub_;
   
   // Callbacks
   void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
@@ -97,6 +99,7 @@ private:
   void yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg);
   void depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg);
   void joyCallback(const sensor_msgs::Joy::ConstPtr& msg);
+  void pingCallback(const std_msgs::Empty::ConstPtr& msg);
   
   // Publications
   ros::Publisher yaw_pid_enable_pub_;
