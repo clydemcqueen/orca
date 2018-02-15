@@ -2,6 +2,7 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <nav_msgs/Odometry.h>
 #include "orca_base/orca_base.h"
 #include "orca_base/orca_pwm.h"
 
@@ -108,6 +109,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   depth_pid_enable_pub_ = nh_priv_.advertise<std_msgs::Bool>("/depth_pid/pid_enable", 1);
   depth_state_pub_ = nh_priv_.advertise<std_msgs::Float64>("/depth_pid/state", 1);
   depth_setpoint_pub_ = nh_priv_.advertise<std_msgs::Float64>("/depth_pid/setpoint", 1);
+  odom_pub_ = nh_priv_.advertise<nav_msgs::Odometry>("/odom", 1);
 
   // Disable pid controllers
   publishYawPidEnable(false);
@@ -153,6 +155,22 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 
   // Compute a stability metric, used to throttle the pid controllers
   stability_ = std::min(clamp(std::cos(roll), 0.0, 1.0), clamp(std::cos(pitch), 0.0, 1.0));
+
+  // Estimate position -- experimental
+  if (imu_ready_)
+  {
+    tf2::Vector3 linear_acceleration;
+    tf2::fromMsg(msg->linear_acceleration, linear_acceleration);
+    double west = linear_acceleration.y();
+    linear_acceleration.setY(linear_acceleration.x()); // NWU to ENU
+    linear_acceleration.setX(-west); // NWU to ENU
+    tf2::fromMsg(msg->angular_velocity, angular_velocity_);// TODO NWU to ENU?
+    // TODO get covariance
+    double delta = (msg->header.stamp - imu_msg_time_).toSec();
+    linear_velocity_ += linear_acceleration * delta;
+    position_ += linear_velocity_ * delta;
+  }
+  imu_msg_time_ = msg->header.stamp;
 
   if (!imu_ready_)
   {
@@ -223,16 +241,30 @@ void OrcaBase::publishOdom()
 {
   if (imu_ready_ && barometer_ready_)
   {
-    // Publish a transform from base_link to odom with rpy (from the imu) and z (from the barometer)
+    // Publish a transform from base_link to odom
     geometry_msgs::TransformStamped odom_tf;
-    odom_tf.header.stamp = ros::Time::now();
+    odom_tf.header.stamp = imu_msg_time_;
     odom_tf.header.frame_id = "odom";
     odom_tf.child_frame_id = "base_link";
-    odom_tf.transform.translation.x = 0;
-    odom_tf.transform.translation.y = 0;
+    odom_tf.transform.translation.x = position_.x();
+    odom_tf.transform.translation.y = position_.y();
     odom_tf.transform.translation.z = -depth_state_;
     odom_tf.transform.rotation = tf2::toMsg(base_orientation_);
     tf_broadcaster_.sendTransform(odom_tf);
+
+    // Publish an odom message
+    nav_msgs::Odometry odom_msg;
+    odom_msg.header.stamp = imu_msg_time_;
+    odom_msg.header.frame_id = "odom";
+    odom_msg.child_frame_id = "base_link";
+    odom_msg.pose.pose.position.x = position_.x();
+    odom_msg.pose.pose.position.y = position_.y();
+    odom_msg.pose.pose.position.z = -depth_state_;
+    odom_msg.pose.pose.orientation = tf2::toMsg(base_orientation_);
+    odom_msg.twist.twist.angular = tf2::toMsg(angular_velocity_);
+    odom_msg.twist.twist.linear = tf2::toMsg(linear_velocity_);
+    // TODO compute covariance
+    odom_pub_.publish(odom_msg);
   }
 }
 
