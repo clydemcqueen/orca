@@ -3,7 +3,6 @@
 # ROS node to publish processor status
 
 import os
-import time
 import rospy
 from orca_msgs.msg import Proc
   
