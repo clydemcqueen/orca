@@ -2,7 +2,7 @@
 <package format="2">
 
   <name>orca_msgs</name>
-  <version>0.0.0</version>
+  <version>0.1.0</version>
   <description>Orca messages</description>
 
   <maintainer email="clyde@mcqueen.net">Clyde McQueen</maintainer>
