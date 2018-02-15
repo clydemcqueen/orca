@@ -6,6 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
   orca_base
   orca_msgs
   roscpp
+  rospy
   rviz
 )
 

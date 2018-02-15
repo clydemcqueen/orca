@@ -164,7 +164,7 @@ void OrcaPanel::leakCallback(const orca_msgs::Leak::ConstPtr &msg)
 void OrcaPanel::procCallback(const orca_msgs::Proc::ConstPtr &msg)
 {
   proc_viewer_->setText(QString("Processor temp %1°").arg(msg->cpu_temp, -1, 'f', 1));
-  proc_viewer_->setPalette(msg->cpu_temp < 50 ? ok_palette_ : (msg->cpu_temp < 80 ? alert_palette_ : danger_palette_));
+  proc_viewer_->setPalette(msg->cpu_temp < 70 ? ok_palette_ : (msg->cpu_temp < 80 ? alert_palette_ : danger_palette_));
 }
 
 void OrcaPanel::yawPidEnableCallback(const std_msgs::Bool::ConstPtr &msg)
