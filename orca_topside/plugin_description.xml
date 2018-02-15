@@ -1,0 +1,16 @@
+<library path="liborca_topside">
+  <class name="orca_topside/OrcaPanel"
+         type="orca_topside::OrcaPanel"
+         base_class_type="rviz::Panel">
+    <description>
+      Orca ROV topside controls
+    </description>
+  </class>
+  <class name="orca_topside/VideoPanel"
+         type="orca_topside::VideoPanel"
+         base_class_type="rviz::Panel">
+    <description>
+      Orca ROV h264 video
+    </description>
+  </class>
+</library>

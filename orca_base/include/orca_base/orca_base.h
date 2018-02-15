@@ -9,22 +9,16 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 #include "orca_msgs/Barometer.h"
+#include "orca_msgs/Control.h"
 
 namespace orca_base {
 
-enum class Mode
-{
-  disarmed,       // Thrusters are off; autopilot is off; all joystick buttons except "arm" are ignored
-  manual,         // Thrusters are on; manual thruster control
-  stabilize,      // Thrusters are on; autopilot is on and controlling yaw
-  depth_hold      // Thrusters are on; autopilot is on and controlling yaw and depth
-};
-
-// OrcaBase provides basic ROV and AUV functions, including joystick operation, attitude hold, depth hold, and waypoint navigation.
+// OrcaBase provides basic ROV and AUV functions, including joystick operation, heading hold, depth hold, and waypoint navigation.
 class OrcaBase
 {
 private:
   ros::NodeHandle &nh_;
+  ros::NodeHandle &nh_priv_;
   tf2_ros::TransformListener &tf_;
 
   // Parameters from the parameter server
@@ -37,9 +31,9 @@ private:
   int joy_button_disarm_;
   int joy_button_arm_;
   int joy_button_manual_;
-  int joy_button_stabilize_;
-  int joy_button_depth_hold_;
-  int joy_button_surface_;
+  int joy_button_hold_h_;
+  int joy_button_hold_d_;
+  int joy_button_hold_hd_;
   int joy_button_tilt_down_;
   int joy_button_tilt_up_;
   int joy_button_bright_;
@@ -54,10 +48,12 @@ private:
   tf2::Quaternion imu_rotation_;
 
   // General state
-  Mode mode_;
+  uint8_t mode_;
   bool imu_ready_;                    // True if we've received at least one imu message
   bool barometer_ready_;              // True if we've received at least one barometer message
   tf2::Quaternion base_orientation_;  // Current orientation
+  double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
+  ros::Time ping_time_;               // Last time we heard from the topside
 
   // Yaw pid control state
   double yaw_state_;
@@ -65,10 +61,16 @@ private:
   bool yaw_trim_button_previous_;
 
   // Depth pid control state
+  double depth_adjustment_;
   double depth_state_;
   double depth_setpoint_;
   bool depth_trim_button_previous_;
-  
+
+  // Joystick gain (attenuation), range 0.0 (ignore joystick) to 1.0 (no attenuation)
+  double xy_gain_;
+  double yaw_gain_;
+  double vertical_gain_;
+
   // Thruster effort from joystick or pid controllers (yaw and depth), ranges from 1.0 for forward to -1.0 for reverse
   double forward_effort_;
   double yaw_effort_;
@@ -80,8 +82,8 @@ private:
   bool tilt_trim_button_previous_;
 
   // Lights
-  int lights_;
-  bool lights_trim_button_previous_;
+  int brightness_;
+  bool brightness_trim_button_previous_;
 
   // Subscriptions
   ros::Subscriber baro_sub_;
@@ -89,6 +91,7 @@ private:
   ros::Subscriber yaw_control_effort_sub_;
   ros::Subscriber depth_control_effort_sub_;
   ros::Subscriber joy_sub_;
+  ros::Subscriber ping_sub_;
   
   // Callbacks
   void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
@@ -96,32 +99,35 @@ private:
   void yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg);
   void depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg);
   void joyCallback(const sensor_msgs::Joy::ConstPtr& msg);
+  void pingCallback(const std_msgs::Empty::ConstPtr& msg);
   
   // Publications
-  ros::Publisher thrusters_pub_;
   ros::Publisher yaw_pid_enable_pub_;
   ros::Publisher yaw_state_pub_;
   ros::Publisher yaw_setpoint_pub_;
   ros::Publisher depth_pid_enable_pub_;
   ros::Publisher depth_state_pub_;
   ros::Publisher depth_setpoint_pub_;
-  ros::Publisher camera_tilt_pub_;
-  ros::Publisher lights_pub_;
+  ros::Publisher control_pub_;
+  ros::Publisher marker_pub_;
   tf2_ros::TransformBroadcaster tf_broadcaster_;
   
   // Helpers
   void publishYawSetpoint();
   void publishDepthSetpoint();
-  void publishCameraTilt();
-  void publishLights();
+  void publishYawPidEnable(bool enable);
+  void publishDepthPidEnable(bool enable);
+  void publishControl();
   void publishOdom();
-  void setMode(Mode mode, double depth_setpoint);
-  
+  void setMode(uint8_t mode);
+  bool holdingHeading() { return mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd; };
+  bool holdingDepth() { return mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd; };
+
 public:
-  explicit OrcaBase(ros::NodeHandle &nh, tf2_ros::TransformListener &tf);
+  explicit OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf);
   ~OrcaBase() {}; // Suppress default copy and move constructors
 
-  void spinOnce(const ros::TimerEvent &event);
+  void spinOnce();
 };
 
 } // namespace orca_base

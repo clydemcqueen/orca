@@ -1,114 +1,70 @@
 #include "orca_driver/orca_driver.h"
 
-template<class T>
-constexpr const T clamp(const T v, const T min, const T max)
-{
-  return v > max ? max : (v < min ? min : v);
-}
-  
-constexpr const uint16_t servo_pulse_width(const double v, const double v_min, const double v_max, const uint16_t pwm_min, const uint16_t pwm_max)
-{
-  return clamp(static_cast<uint16_t>(pwm_min + static_cast<double>(pwm_max - pwm_min) / (v_max - v_min) * (v - v_min)), pwm_min, pwm_max);
-}
-
 namespace orca_driver {
 
-OrcaDriver::OrcaDriver(ros::NodeHandle &nh) :
-  nh_{nh}
+// Message publish rate in Hz
+constexpr int SPIN_RATE = 50;
+
+OrcaDriver::OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv) :
+  nh_{nh},
+  nh_priv_{nh_priv}
 {
-  nh_.param<std::string>("maestro_port", maestro_port_, "/dev/ttyACM0");
+  nh_priv_.param<std::string>("maestro_port", maestro_port_, "/dev/ttyACM0");
   ROS_INFO("Expecting Maestro on port %s", maestro_port_.c_str());
 
-  nh_.param("num_thrusters", num_thrusters_, 6);
-  ROS_INFO("Configured for %d thrusters:", num_thrusters_);
+  nh_priv_.param("num_thrusters", num_thrusters_, 6);
+  ROS_INFO("Configuring for %d thrusters:", num_thrusters_);
   for (int i = 0; i < num_thrusters_; ++i)
   {
-    int channel;
-    nh_.param("thruster_" + std::to_string(i + 1) + "_channel", channel, i); // TODO doesn't work w/ gaps
-    thruster_channels_.push_back(channel);
-    ROS_INFO("Thruster %d on channel %d", i + 1, channel);   
+    Thruster t;
+    nh_priv_.param("thruster_" + std::to_string(i + 1) + "_channel", t.channel_, i); // No checks for channel conflicts!
+    nh_priv_.param("thruster_" + std::to_string(i + 1) + "_reverse", t.reverse_, false);
+    thrusters_.push_back(t);
+    ROS_INFO("Thruster %d on channel %d %s", i + 1, t.channel_, t.reverse_ ? "(reversed)" : "");
   }
 
-  nh_.param("thruster_limit", thruster_limit_, 1.0); // TODO clamp thruster_limit_ to 0, 1.0
-  ROS_INFO("Thruster effort limited to %g", thruster_limit_);
-
-  nh_.param("lights_channel", lights_channel_, 8);
+  nh_priv_.param("lights_channel", lights_channel_, 8);
   ROS_INFO("Lights on channel %d", lights_channel_);
-  
-  nh_.param("tilt_channel", tilt_channel_, 9);
+
+  nh_priv_.param("tilt_channel", tilt_channel_, 9);
   ROS_INFO("Camera servo on channel %d", tilt_channel_);
-  
-  nh_.param("voltage_channel", voltage_channel_, 11); // Must be analog input
-  nh_.param("voltage_multiplier", voltage_multiplier_, 4.7);
-  nh_.param("voltage_min", voltage_min_, 12.0);
+
+  nh_priv_.param("voltage_channel", voltage_channel_, 11); // Must be analog input
+  nh_priv_.param("voltage_multiplier", voltage_multiplier_, 4.7);
+  nh_priv_.param("voltage_min", voltage_min_, 12.0);
   ROS_INFO("Voltage sensor on channel %d, multiplier is %g, minimum is %g", voltage_channel_, voltage_multiplier_, voltage_min_);
 
-  nh_.param("leak_channel", leak_channel_, 12); // Must be digital input
+  nh_priv_.param("leak_channel", leak_channel_, 12); // Must be digital input
   ROS_INFO("Leak sensor on channel %d", leak_channel_);
 
-  nh_.param("spin_rate", spin_rate_, 50);
-  ROS_INFO("Publishing messages at %d Hz", spin_rate_);
-
-  // Set up subscriptions
-  camera_tilt_sub_ = nh_.subscribe<orca_msgs::Camera>("/camera_tilt", 10, &OrcaDriver::cameraTiltCallback, this);
-  lights_sub_ = nh_.subscribe<orca_msgs::Lights>("/lights", 10, &OrcaDriver::lightsCallback, this);
-  thrusters_sub_ = nh_.subscribe<orca_msgs::Thrusters>("/thrusters", 10, &OrcaDriver::thrustersCallback, this);
+  // Set up subscription
+  control_sub_ = nh_priv_.subscribe<orca_msgs::Control>("/orca_base/control", 10, &OrcaDriver::controlCallback, this);
   
   // Advertise topics that we'll publish on
-  battery_pub_ = nh_.advertise<orca_msgs::Battery>("/battery", 1);
-  leak_pub_ = nh_.advertise<orca_msgs::Leak>("/leak", 1);
+  battery_pub_ = nh_priv_.advertise<orca_msgs::Battery>("battery", 1);
+  leak_pub_ = nh_priv_.advertise<orca_msgs::Leak>("leak", 1);
 }
 
-void OrcaDriver::cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg)
+void OrcaDriver::controlCallback(const orca_msgs::Control::ConstPtr &msg)
 {
   if (maestro_.ready())
   {
-    uint16_t pwm = servo_pulse_width(-msg->tilt, -45, 45, 1100, 1900);
-    ROS_DEBUG("Set tilt pulse width to %d", pwm);
-    maestro_.setPWM(static_cast<uint8_t>(tilt_channel_), pwm);
-  }
-  else
-  {
-    ROS_ERROR("Can't tilt camera");
-  }
-}
+    maestro_.setPWM(static_cast<uint8_t>(tilt_channel_), msg->camera_tilt_pwm);
+    maestro_.setPWM(static_cast<uint8_t>(lights_channel_), msg->brightness_pwm);
 
-void OrcaDriver::lightsCallback(const orca_msgs::Lights::ConstPtr &msg)
-{
-  if (maestro_.ready())
-  {
-    uint16_t pwm = servo_pulse_width(msg->brightness, 0, 100, 1100, 1900);
-    ROS_DEBUG("Set lights pulse width to %d", pwm);
-    maestro_.setPWM(static_cast<uint8_t>(lights_channel_), pwm);
-  }
-  else
-  {
-    ROS_ERROR("Can't set brightness");
-  }
-}
-
-void OrcaDriver::thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg)
-{
-  if (maestro_.ready())
-  {
-    for (int i = 0; i < thruster_channels_.size(); ++i)
+    for (int i = 0; i < thrusters_.size(); ++i)
     {
-      double effort = msg->effort[i];
-      effort = clamp(effort, -thruster_limit_, thruster_limit_);
+      uint16_t pwm = msg->thruster_pwm[i];
 
       // Compensate for ESC programming errors
-      // TODO generalize this
-      if (i == 3)
-      {
-        effort = -effort;
-      }
+      if (thrusters_[i].reverse_) pwm = static_cast<uint16_t>(3000 - pwm);
 
-      maestro_.setPWM(static_cast<uint8_t>(thruster_channels_[i]), servo_pulse_width(effort, -1.0, 1.0, 1100, 1900));
+      maestro_.setPWM(static_cast<uint8_t>(thrusters_[i].channel_), pwm);
     }
   }
   else
   {
-    ROS_ERROR("Can't operate thrusters");
+    ROS_ERROR("Maestro not ready, ignoring control message");
   }
 }
 
@@ -117,6 +73,7 @@ bool OrcaDriver::readBattery()
   double temp;
   if (maestro_.ready() && maestro_.getAnalog(static_cast<uint8_t>(voltage_channel_), temp))
   {
+    battery_msg_.header.stamp = ros::Time::now();
     battery_msg_.voltage = temp * voltage_multiplier_;
     return true;
   }
@@ -132,7 +89,8 @@ bool OrcaDriver::readLeak()
   bool temp;
   if (maestro_.ready() && maestro_.getDigital(static_cast<uint8_t>(leak_channel_), temp))
   {
-    leak_msg_.leak_detected = temp;
+    leak_msg_.header.stamp = ros::Time::now();
+    leak_msg_.leak_detected = static_cast<uint8_t>(temp);
     return true;
   }
   else
@@ -175,12 +133,20 @@ bool OrcaDriver::preDive()
     return false;
   }
 
-  for (int i = 0; i < thruster_channels_.size(); ++i)
+  // When the Maestro boots, it should set all thruster channels to 1500.
+  // But on a system restart it might be a bad state. Force an all-stop.
+  for (int i = 0; i < thrusters_.size(); ++i)
+  {
+    maestro_.setPWM(static_cast<uint8_t>(thrusters_[i].channel_), 1500);
+  }
+
+  // Check to see that all thrusters are stopped.
+  for (int i = 0; i < thrusters_.size(); ++i)
   {
     uint16_t value;
-    maestro_.getPWM(static_cast<uint8_t>(thruster_channels_[i]), value);
+    maestro_.getPWM(static_cast<uint8_t>(thrusters_[i].channel_), value);
     ROS_INFO("Thruster %d is set at %d", i + 1, value);
-    if (value != 1500) // TODO constant
+    if (value != 1500)
     {
       ROS_ERROR("Thruster %d didn't initialize properly (and possibly others)", i + 1);
       maestro_.disconnect();
@@ -211,7 +177,7 @@ bool OrcaDriver::run()
   }
 
   ROS_INFO("Entering main loop");  
-  ros::Rate r(spin_rate_);
+  ros::Rate r(SPIN_RATE);
   while (ros::ok())
   {
     // Do our work
@@ -234,10 +200,11 @@ int main(int argc, char **argv)
 {
   // Initialize ROS
   ros::init(argc, argv, "orca_driver");
-  ros::NodeHandle nh{"~"};
+  ros::NodeHandle nh{""};
+  ros::NodeHandle nh_priv{"~"};
 
   // Run the driver; in normal use the power will be yanked and run() will never return
-  orca_driver::OrcaDriver orca_driver{nh};
+  orca_driver::OrcaDriver orca_driver{nh, nh_priv};
   if (orca_driver.run())
   {
     // Normal exit (Ctrl-C) during testing, ROS has already been shut down
@@ -246,7 +213,8 @@ int main(int argc, char **argv)
   else
   {
     // Orca failure during testing, hopefully we logged some decent diagnostics
+    ROS_ERROR("Orca shutting down :(");
     ros::shutdown();
-    return -1;
+    return 1;
   }
 }

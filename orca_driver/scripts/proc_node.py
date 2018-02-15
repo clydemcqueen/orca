@@ -3,7 +3,6 @@
 # ROS node to publish processor status
 
 import os
-import time
 import rospy
 from orca_msgs.msg import Proc
   
@@ -23,6 +22,7 @@ def run():
     temp = os.popen("cat /sys/class/thermal/thermal_zone0/temp").read().strip()
 
     msg = Proc()
+    msg.header.stamp = rospy.Time.now()
     msg.cpu_temp = float(temp) / 1000
     pub.publish(msg)
 

@@ -4,6 +4,7 @@ project(orca_gazebo)
 ## Find catkin and everything we need in ROS
 find_package(catkin REQUIRED COMPONENTS 
   gazebo_ros
+  orca_base
   orca_msgs
   roscpp
   rospy
@@ -16,11 +17,11 @@ find_package(gazebo REQUIRED)
 catkin_package(
   CATKIN_DEPENDS 
     gazebo_ros
+    orca_base
     orca_msgs
     roscpp
     rospy
 )
-
 
 ## Set up include directories
 include_directories(${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})
@@ -31,10 +32,14 @@ link_directories(${GAZEBO_LIBRARY_DIRS})
 ## Require C++14
 add_compile_options(-std=c++14)
 
+add_library(DragPlugin src/drag_plugin.cpp)
+add_dependencies(DragPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(DragPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
 add_library(ThrusterPlugin src/thruster_plugin.cpp)
-target_link_libraries(ThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_dependencies(ThrusterPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(ThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 
 add_library(BarometerPlugin src/barometer_plugin.cpp)
-target_link_libraries(BarometerPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_dependencies(BarometerPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(BarometerPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})

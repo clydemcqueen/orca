@@ -3,6 +3,8 @@
   <!-- Launch Gazebo with our world file -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find orca_gazebo)/worlds/orca.world" />
+    <arg name="paused" value="true" />
+    <arg name="verbose" value="true" />
   </include>
 
   <!-- Launch Orca nodes -->
@@ -12,6 +14,9 @@
   <include file="$(find orca_topside)/launch/topside.launch" />
     
   <!-- Run the gazebo model spawner; it will turn URDF into SDF and inject the model into the running world -->
-  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -z 1 -model orca" output="screen" />
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -z 10 -model orca" output="screen" />
+
+  <!-- Launch multiplot -->
+  <node name="rqt_multiplot" pkg="rqt_multiplot" type="rqt_multiplot" />
 
 </launch>

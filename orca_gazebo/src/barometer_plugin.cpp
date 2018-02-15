@@ -14,17 +14,14 @@ namespace gazebo
 //        <update_rate>60</update_rate>
 //        <plugin name="BarometerPlugin" filename="libBarometerPlugin.so">
 //          <ros_topic>/barometer</ros_topic>
-//          <surface>9</surface>
 //          <fluid_density>1029</fluid_density>
 //        </plugin>
 //      </sensor>
 //    </gazebo>
 //
 // We publish Barometer messages on <ros_topic>.
-// The surface of the water is <surface> meters above the ground plane.
 // The fluid density is <fluid_density> kg/m^3. Use 997 for freshwater and 1029 for seawater.
-// 
-// TODO: evaluate the noise model
+// The model must be spawned at the surface.
 
 class BarometerPlugin : public SensorPlugin
 {
@@ -40,9 +37,6 @@ private:
 
   // ROS publisher
   ros::Publisher baro_pub_;
-
-  // Surface height
-  double surface_;
 
   // Fluid density
   double fluid_density_;
@@ -73,14 +67,6 @@ public:
     // Set up ROS publisher
     baro_pub_ = nh_->advertise<orca_msgs::Barometer>(ros_topic, 1);
 
-    // Get surface height
-    surface_ = 9;
-    if (sdf->HasElement("surface"))
-    {
-      surface_ = sdf->GetElement("surface")->Get<double>();
-    }
-    ROS_INFO("Water surface is %g meters above the ground plane", surface_);
-
     // Get water density
     constexpr double seawater_density = 1029;
     fluid_density_ = seawater_density;
@@ -107,7 +93,9 @@ public:
     constexpr double gravity = 9.80665;               // m/s^2
 
     orca_msgs::Barometer baro_msg;
-    double depth = surface_ - altimeter_->Altitude();
+
+    // The altimeter sensor zeros out when it starts
+    double depth = -altimeter_->Altitude();
 
     if (depth >= 0.0)
     {

@@ -6,12 +6,16 @@
 #include <ros/ros.h>
 #include "orca_driver/maestro.h"
 #include "orca_msgs/Battery.h"
-#include "orca_msgs/Camera.h"
+#include "orca_msgs/Control.h"
 #include "orca_msgs/Leak.h"
-#include "orca_msgs/Lights.h"
-#include "orca_msgs/Thrusters.h"
 
 namespace orca_driver {
+
+struct Thruster
+{
+  int channel_;
+  bool reverse_;
+};
 
 // OrcaDriver provides the interface between the Orca hardware and ROS.
 
@@ -19,16 +23,15 @@ class OrcaDriver
 {
 private:
   ros::NodeHandle &nh_;
+  ros::NodeHandle &nh_priv_;
 
   // Parameters
   int num_thrusters_;
-  std::vector<int> thruster_channels_;
-  double thruster_limit_;
+  std::vector<Thruster> thrusters_;
   int lights_channel_;
   int tilt_channel_;
   int voltage_channel_;
   int leak_channel_;
-  int spin_rate_;
   std::string maestro_port_;
   double voltage_multiplier_;
   double voltage_min_;
@@ -39,14 +42,10 @@ private:
   orca_msgs::Leak leak_msg_;
   
   // Subscriptions
-  ros::Subscriber camera_tilt_sub_;
-  ros::Subscriber lights_sub_;
-  ros::Subscriber thrusters_sub_;
+  ros::Subscriber control_sub_;
   
   // Callbacks
-  void cameraTiltCallback(const orca_msgs::Camera::ConstPtr &msg);
-  void lightsCallback(const orca_msgs::Lights::ConstPtr &msg);
-  void thrustersCallback(const orca_msgs::Thrusters::ConstPtr &msg);
+  void controlCallback(const orca_msgs::Control::ConstPtr &msg);
   
   // Publications
   ros::Publisher battery_pub_;
@@ -58,7 +57,7 @@ private:
   bool preDive();
 
 public:
-  explicit OrcaDriver(ros::NodeHandle &nh);
+  explicit OrcaDriver(ros::NodeHandle &nh, ros::NodeHandle &nh_priv);
   ~OrcaDriver() {}; // Suppress default copy and move constructors
 
   bool run();

@@ -1,9 +1,12 @@
 <launch>
 
-  <!-- Launch the joystick driver -->
+  <!-- Joystick driver -->
   <node name="joystick" pkg="joy" type="joy_node" output="screen" />
 
-  <!-- Launch rviz; TODO add configuration -->
-  <node name="rviz" pkg="rviz" type="rviz" output="screen" />
+  <!-- Publish a heartbeat so that the Orca knows that the topside is running -->
+  <node name="heartbeat" pkg="orca_topside" type="ping_node.py" output="screen" />
+
+  <!-- Rviz -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find orca_topside)/cfg/topside.rviz" output="screen" />
 
 </launch>
