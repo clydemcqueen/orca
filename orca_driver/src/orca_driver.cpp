@@ -133,6 +133,14 @@ bool OrcaDriver::preDive()
     return false;
   }
 
+  // When the Maestro boots, it should set all thruster channels to 1500.
+  // But on a system restart it might be a bad state. Force an all-stop.
+  for (int i = 0; i < thrusters_.size(); ++i)
+  {
+    maestro_.setPWM(static_cast<uint8_t>(thrusters_[i].channel_), 1500);
+  }
+
+  // Check to see that all thrusters are stopped.
   for (int i = 0; i < thrusters_.size(); ++i)
   {
     uint16_t value;
