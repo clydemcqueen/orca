@@ -246,8 +246,8 @@ void OrcaBase::publishOdom()
     odom_tf.header.stamp = imu_msg_time_;
     odom_tf.header.frame_id = "odom";
     odom_tf.child_frame_id = "base_link";
-    odom_tf.transform.translation.x = position_.x();
-    odom_tf.transform.translation.y = position_.y();
+    odom_tf.transform.translation.x = 0; // position_.x();
+    odom_tf.transform.translation.y = 0; // position_.y();
     odom_tf.transform.translation.z = -depth_state_;
     odom_tf.transform.rotation = tf2::toMsg(base_orientation_);
     tf_broadcaster_.sendTransform(odom_tf);
@@ -257,8 +257,8 @@ void OrcaBase::publishOdom()
     odom_msg.header.stamp = imu_msg_time_;
     odom_msg.header.frame_id = "odom";
     odom_msg.child_frame_id = "base_link";
-    odom_msg.pose.pose.position.x = position_.x();
-    odom_msg.pose.pose.position.y = position_.y();
+    odom_msg.pose.pose.position.x = 0; // position_.x();
+    odom_msg.pose.pose.position.y = 0; // position_.y();
     odom_msg.pose.pose.position.z = -depth_state_;
     odom_msg.pose.pose.orientation = tf2::toMsg(base_orientation_);
     odom_msg.twist.twist.angular = tf2::toMsg(angular_velocity_);
