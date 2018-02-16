@@ -1,6 +1,9 @@
 <launch>
 
-  <arg name="simulation" default="true" />
+  <!-- Arguments; defaults are for a live launch -->
+  <arg name="simulation" default="false" />
+  <arg name="launch_complementary_filter" default="true" />
+  <arg name="launch_madgwick_filter" default="false" />
 
   <!-- Load robot description and launch robot and state publishers -->
   <include file="$(find orca_description)/launch/description.launch" />
@@ -9,6 +12,20 @@
   <node name="orca_base" pkg="orca_base" type="orca_base" output="log">
     <param name="simulation" value="$(arg simulation)" />
     <param name="effort_dead_band" value="0.0005" />
+  </node>
+
+  <!-- Launch complementary filter -->
+  <node pkg="imu_complementary_filter" type="complementary_filter_node" name="imu_filter" if="$(arg launch_complementary_filter)">
+    <param name="use_mag" value="true" /> <!-- Use magnetic field data -->
+    <param name="publish_tf" value="false" /> <!-- Do not publish a transform, orca_base will do that -->
+  </node>
+
+  <!-- Or launch madgwick filter (but not both filters) -->
+  <node pkg="imu_filter_madgwick" type="imu_filter_node" name="imu_filter" if="$(arg launch_madgwick_filter)">
+    <param name="use_mag" value="true" /> <!-- Use magnetic field data -->
+    <param name="use_magnetic_field_msg" value="true" /> <!-- Use the new msg type -->
+    <param name="publish_tf" value="false" /> <!-- Do not publish a transform, orca_base will do that -->
+    <param name="world_frame" value="nwu" /> <!-- Complementary filter uses NWU, so force Madgwick to as well -->
   </node>
 
   <!-- Launch the yaw pid controller -->

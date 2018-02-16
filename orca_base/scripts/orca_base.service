@@ -1,0 +1,9 @@
+[Unit]
+Description=Orca ROS base
+
+[Service]
+User=pi
+ExecStart=/home/pi/orca_catkin_ws/src/orca/orca_base/scripts/start_orca_base.sh
+
+[Install]
+WantedBy=multi-user.target

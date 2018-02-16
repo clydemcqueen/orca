@@ -1,6 +1,6 @@
 <launch>
 
-  <!-- Pololu Maestro -->
+  <!-- Orca driver -->
   <node name="orca_driver" pkg="orca_driver" type="orca_driver" output="log">
     <param name="voltage_multiplier" value="5.05" />
     <param name="thruster_4_reverse" value="true" />
@@ -14,11 +14,10 @@
   <node name="proc" pkg="orca_driver" type="proc_node.py" output="log" />
 
   <!-- Phidgets IMU -->
-  <include file="$(find orca_driver)/launch/imu.launch" />
-
-  <!-- Orca base -->
-  <include file="$(find orca_base)/launch/base.launch">
-    <arg name="simulation" value="false" />
-  </include>
+  <node pkg="phidgets_imu" type="phidgets_imu_node" name="imu_driver">
+    <param name="frame_id" value="imu_link" />
+    <param name="period" value="8" /> <!-- supported data rates: 4 8 16 24 32 40 ... 1000 (in ms) -->
+    <!-- don't provide compass correction params; these are stored in the Phidgets firmware -->
+  </node>
 
 </launch>
