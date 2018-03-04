@@ -43,11 +43,12 @@ private:
   int inc_tilt_;
   int inc_lights_;
   float input_dead_band_;
-  double effort_dead_band_;
-  bool simulation_;
+  double yaw_pid_dead_band_;
+  double depth_pid_dead_band_;
   tf2::Quaternion imu_rotation_;
 
   // General state
+  bool simulation_;
   uint8_t mode_;
   bool imu_ready_;                    // True if we've received at least one imu message
   bool barometer_ready_;              // True if we've received at least one barometer message

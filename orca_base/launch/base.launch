@@ -11,7 +11,8 @@
   <!-- Launch orca_base -->
   <node name="orca_base" pkg="orca_base" type="orca_base" output="log">
     <param name="simulation" value="$(arg simulation)" />
-    <param name="effort_dead_band" value="0.0005" />
+    <param name="depth_pid_dead_band" value="0.002" />
+    <param name="yaw_pid_dead_band" value="0.0005" />
   </node>
 
   <!-- Launch complementary filter -->

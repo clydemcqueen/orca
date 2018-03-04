@@ -75,7 +75,8 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_priv_.param("inc_tilt", inc_tilt_, 5);
   nh_priv_.param("inc_lights", inc_lights_, 20);
   nh_priv_.param("input_dead_band", input_dead_band_, 0.05f);            // Don't respond to tiny joystick movements
-  nh_priv_.param("effort_dead_band", effort_dead_band_, 0.005);          // Don't publish tiny thruster efforts
+  nh_priv_.param("yaw_pid_dead_band", yaw_pid_dead_band_, 0.005);
+  nh_priv_.param("depth_pid_dead_band", depth_pid_dead_band_, 0.005);
   nh_priv_.param("xy_gain", xy_gain_, 0.5);
   nh_priv_.param("yaw_gain", yaw_gain_, 0.2);
   nh_priv_.param("vertical_gain", vertical_gain_, 0.5);
@@ -184,7 +185,7 @@ void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
 {
   if (holdingHeading())
   {
-    yaw_effort_ = dead_band(msg->data * stability_, effort_dead_band_);
+    yaw_effort_ = dead_band(msg->data * stability_, yaw_pid_dead_band_);
   }
 }
 
@@ -193,7 +194,7 @@ void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg
 {
   if (holdingDepth())
   {
-    vertical_effort_ = dead_band(-msg->data * stability_, effort_dead_band_);
+    vertical_effort_ = dead_band(-msg->data * stability_, depth_pid_dead_band_);
   }
 }
 
