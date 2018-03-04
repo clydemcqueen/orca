@@ -1,0 +1,42 @@
+<launch>
+
+  <arg name="unqual_manager_name" default="pipeline" />
+  <arg name="manager_name" default="/$(arg unqual_manager_name)" />
+
+  <arg name="approximate_sync" default="true" />        <!-- Run approx sync algorithm to sync L and R cameras -->
+  <arg name="queue_size" default="30" />                <!-- Provide a big enough buffer for approx sync to work -->
+
+  <!-- Nodelet manager -->
+  <node pkg="nodelet" type="nodelet" name="$(arg unqual_manager_name)" args="manager"/>
+
+  <!-- Push all nodelets into /stereo -->
+  <group ns="stereo">
+
+    <!-- Push left camera nodelets into /stereo/left -->
+    <include file="$(find orca_vision)/launch/mono.launch" ns="left">
+      <arg name="manager_name" value="$(arg manager_name)" />
+      <arg name="prefix" value="left" />
+      <arg name="port" value="9002" />
+    </include>
+
+    <!-- Push right camera nodelets into /stereo/right -->
+    <include file="$(find orca_vision)/launch/mono.launch" ns="right">
+      <arg name="manager_name" value="$(arg manager_name)" />
+      <arg name="prefix" value="right" />
+      <arg name="port" value="9001" />
+    </include>
+
+    <!-- Create disparity image -->
+    <node pkg="nodelet" type="nodelet" name="disparity" args="load stereo_image_proc/disparity $(arg manager_name) --no-bond">
+      <param name="approximate_sync" value="$(arg approximate_sync)" />
+      <param name="queue_size" value="$(arg queue_size)" />
+      <param name="stereo_algorithm" value="1" /> <!-- StereoSGBM is slower, but works much better -->
+      <param name="fullDP" value="true" /> <!-- Run the full algorithm -->
+    </node>
+
+    <!-- Create a pointcloud -->
+    <node pkg="nodelet" type="nodelet" name="point_cloud2" args="load stereo_image_proc/point_cloud2 $(arg manager_name) --no-bond" />
+
+  </group>
+
+</launch>

@@ -72,13 +72,14 @@ This is the fastest way to integrate ROS with the BlueROV2.
 You'll need to provide a small device controller, such as the Pololu Maestro, and an IMU, such as the Phidgets IMU.
 This is the Orca design.
 
-There are 6 projects:
+There are 7 projects:
 * `orca_msgs` provides message types
 * `orca_description` provides robot description files
 * `orca_driver` provides the interface between the hardware and ROS (not required for simulations)
 * `orca_base` provides the ROV functionality
 * `orca_topside` provides the topside environment (rviz is used instead of QGroundControl)
 * `orca_gazebo` provides the simulation environment
+* `orca_vision` provides a stereo vision system (experimental)
 
 ## Hardware modifications
 
