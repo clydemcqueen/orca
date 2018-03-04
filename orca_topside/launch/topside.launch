@@ -9,4 +9,7 @@
   <!-- Rviz -->
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find orca_topside)/cfg/topside.rviz" output="screen" />
 
+  <!-- Orca base -->
+  <include file="$(find orca_base)/launch/base.launch" />
+
 </launch>
