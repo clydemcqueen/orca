@@ -1,0 +1,9 @@
+[Unit]
+Description=Orca ROS driver
+
+[Service]
+User=pi
+ExecStart=/home/pi/orca_catkin_ws/src/orca/orca_driver/scripts/start_orca_driver.sh
+
+[Install]
+WantedBy=multi-user.target

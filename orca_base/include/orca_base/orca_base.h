@@ -43,17 +43,22 @@ private:
   int inc_tilt_;
   int inc_lights_;
   float input_dead_band_;
-  double effort_dead_band_;
-  bool simulation_;
+  double yaw_pid_dead_band_;
+  double depth_pid_dead_band_;
   tf2::Quaternion imu_rotation_;
 
   // General state
+  bool simulation_;
   uint8_t mode_;
   bool imu_ready_;                    // True if we've received at least one imu message
   bool barometer_ready_;              // True if we've received at least one barometer message
   tf2::Quaternion base_orientation_;  // Current orientation
   double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
   ros::Time ping_time_;               // Last time we heard from the topside
+  ros::Time imu_msg_time_;            // Time of last imu message
+  tf2::Vector3 angular_velocity_;     // Angular velocity
+  tf2::Vector3 linear_velocity_;      // Estimated linear velocity
+  tf2::Vector3 position_;             // Estimated position
 
   // Yaw pid control state
   double yaw_state_;
@@ -110,6 +115,7 @@ private:
   ros::Publisher depth_setpoint_pub_;
   ros::Publisher control_pub_;
   ros::Publisher marker_pub_;
+  ros::Publisher odom_pub_;
   tf2_ros::TransformBroadcaster tf_broadcaster_;
   
   // Helpers

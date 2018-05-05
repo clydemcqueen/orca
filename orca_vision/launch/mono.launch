@@ -1,0 +1,29 @@
+<launch>
+
+  <arg name="manager_name" /> <!-- Must be globally qualified -->
+  <arg name="prefix" />       <!-- Typically left or right -->
+  <arg name="port" />         <!-- Where gscam will find the h264 stream -->
+
+  <!-- Convert incoming h264 stream to ROS images -->
+  <node pkg="nodelet" type="nodelet" name="pi_cam" args="load gscam/GSCamNodelet $(arg manager_name) --no-bond">
+    <remap from="camera/image_raw" to="image_raw" />
+    <remap from="camera/camera_info" to="camera_info" />
+    <param name="camera_name" value="$(arg prefix)_cam" />
+    <param name="camera_info_url" value="package://orca_vision/params/$(arg prefix).yaml" />
+    <param name="frame_id" value="$(arg prefix)_camera_frame" />
+    <param name="gscam_config" value="udpsrc port=$(arg port) ! application/x-rtp, payload=96 ! rtpjitterbuffer ! rtph264depay ! avdec_h264 ! videoconvert" />
+  </node>
+
+  <!-- Debayer -->
+  <node pkg="nodelet" type="nodelet" name="debayer" args="load image_proc/debayer $(arg manager_name) --no-bond" />
+
+  <!-- Rectify mono -->
+  <node pkg="nodelet" type="nodelet" name="rectify_mono" args="load image_proc/rectify $(arg manager_name) --no-bond" />
+
+  <!-- Rectify color -->
+  <node pkg="nodelet" type="nodelet" name="rectify_color" args="load image_proc/rectify $(arg manager_name) --no-bond">
+    <remap from="image_mono" to="image_color" />
+    <remap from="image_rect" to="image_rect_color" />
+  </node>
+
+</launch>

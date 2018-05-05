@@ -8,7 +8,11 @@
   </include>
 
   <!-- Launch Orca nodes -->
-  <include file="$(find orca_base)/launch/base.launch" />
+  <include file="$(find orca_base)/launch/base.launch">
+    <arg name="simulation" value="true" />
+    <arg name="launch_complementary_filter" value="false" /> <!-- Simulated IMU doesn't need a filter -->
+    <arg name="launch_madgwick_filter" default="false" />
+  </include>
 
   <!-- Launch topside nodes -->
   <include file="$(find orca_topside)/launch/topside.launch" />
@@ -17,6 +21,6 @@
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -z 10 -model orca" output="screen" />
 
   <!-- Launch multiplot -->
-  <node name="rqt_multiplot" pkg="rqt_multiplot" type="rqt_multiplot" />
+  <!-- <node name="rqt_multiplot" pkg="rqt_multiplot" type="rqt_multiplot" /> -->
 
 </launch>

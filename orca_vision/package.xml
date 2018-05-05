@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="2">
+
+  <name>orca_vision</name>
+  <version>0.0.0</version>
+  <description>Orca stereo vision</description>
+
+  <maintainer email="clyde@mcqueen.net">Clyde McQueen</maintainer>
+  <license>BSD</license>
+
+  <author>Clyde McQueen</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>gscam</depend>
+  <depend>image_proc</depend>
+  <depend>stereo_image_proc</depend>
+
+</package>
