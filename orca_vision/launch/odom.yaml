@@ -1,0 +1,8 @@
+  <node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer">
+    <remap from="stereo" to="stereo"/>
+    <remap from="image" to="image_rect"/>
+    <param name="approximate_sync" value="$(arg approximate_sync)" />
+    <param name="queue_size" value="$(arg queue_size)" />
+    <param name="ref_frame_change_method" value="2" /> <!-- Keep the current image as long as the # of inliers is high enough -->
+    <param name="ref_frame_inlier_threshold" value="50" /> <!-- Number of inliers we need to keep the same image -->
+  </node>

@@ -1,0 +1,35 @@
+<launch>
+
+  <!--
+    Minimal launch for calibration.
+    For some reason some gst elements go randomly missing when I use nodelets to do this.
+    Perhaps there's a bug in gscam when the camera_info_url is bogus?
+  -->
+
+  <group ns="stereo">
+
+    <node pkg="gscam" type="gscam" name="left_cam">
+      <remap from="camera/image_raw" to="left/image_raw" />
+      <remap from="set_camera_info" to="left/set_camera_info" />
+      <rosparam>
+        camera_name: "left_cam"
+        camera_info_url: "package://orca_vision/params/left.yaml"
+        frame_id: "left_camera_frame"
+        gscam_config: "udpsrc port=9001 ! application/x-rtp, payload=96 ! rtpjitterbuffer ! rtph264depay ! avdec_h264 ! videoconvert"
+      </rosparam>
+    </node>
+
+    <node pkg="gscam" type="gscam" name="right_cam">
+      <remap from="camera/image_raw" to="right/image_raw" />
+      <remap from="set_camera_info" to="right/set_camera_info" />
+      <rosparam>
+        camera_name: "right_cam"
+        camera_info_url: "package://orca_vision/params/right.yaml"
+        frame_id: "right_camera_frame"
+        gscam_config: "udpsrc port=9002 ! application/x-rtp, payload=96 ! rtpjitterbuffer ! rtph264depay ! avdec_h264 ! videoconvert"
+      </rosparam>
+    </node>
+
+  </group>
+
+</launch>
