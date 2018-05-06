@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
+cmake_policy(SET CMP0054 OLD) # Gets rid of an annoying warning in CMake 3.5.1, but need to fix one day
 project(orca_gazebo)
 
 ## Find catkin and everything we need in ROS
