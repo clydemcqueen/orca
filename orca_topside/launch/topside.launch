@@ -1,15 +1,20 @@
 <launch>
 
+  <!-- Arguments; defaults are for a live launch -->
+  <arg name="simulation" default="false" />
+  <arg name="launch_complementary_filter" default="true" />
+  <arg name="launch_madgwick_filter" default="false" />
+
   <!-- Joystick driver -->
   <node name="joystick" pkg="joy" type="joy_node" output="screen" />
 
-  <!-- Publish a heartbeat so that the Orca knows that the topside is running -->
+  <!-- Publish a heartbeat so that Orca knows that the topside is running -->
   <node name="heartbeat" pkg="orca_topside" type="ping_node.py" output="screen" />
 
   <!-- Rviz -->
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find orca_topside)/cfg/topside.rviz" output="screen" />
 
-  <!-- Orca base -->
-  <include file="$(find orca_base)/launch/base.launch" />
+  <!-- Orca base runs topside -->
+  <include file="$(find orca_base)/launch/base.launch" pass_all_args="true" />
 
 </launch>
