@@ -70,40 +70,46 @@ void OrcaDriver::controlCallback(const orca_msgs::Control::ConstPtr &msg)
 
 bool OrcaDriver::readBattery()
 {
-  double temp;
-  if (maestro_.ready() && maestro_.getAnalog(static_cast<uint8_t>(voltage_channel_), temp))
+  battery_msg_.header.stamp = ros::Time::now();
+
+  double value;
+  if (maestro_.ready() && maestro_.getAnalog(static_cast<uint8_t>(voltage_channel_), value))
   {
-    battery_msg_.header.stamp = ros::Time::now();
-    battery_msg_.voltage = temp * voltage_multiplier_;
+    battery_msg_.voltage = value * voltage_multiplier_;
+    battery_msg_.low_battery = static_cast<uint8_t>(battery_msg_.voltage < voltage_min_);
     return true;
   }
   else
   {
     ROS_ERROR("Can't read battery");
+    battery_msg_.voltage = 0;
+    battery_msg_.low_battery = 1;
     return false;  
   }
 }
 
 bool OrcaDriver::readLeak()
 {
-  bool temp;
-  if (maestro_.ready() && maestro_.getDigital(static_cast<uint8_t>(leak_channel_), temp))
+  leak_msg_.header.stamp = ros::Time::now();
+
+  bool value;
+  if (maestro_.ready() && maestro_.getDigital(static_cast<uint8_t>(leak_channel_), value))
   {
-    leak_msg_.header.stamp = ros::Time::now();
-    leak_msg_.leak_detected = static_cast<uint8_t>(temp);
+    leak_msg_.leak_detected = static_cast<uint8_t>(value);
     return true;
   }
   else
   {
     ROS_ERROR("Can't read leak sensor");
+    leak_msg_.leak_detected = 1;
     return false;  
   }
 }
 
 void OrcaDriver::spinOnce()
 {
-  if (readBattery()) battery_pub_.publish(battery_msg_);
-  if (readLeak()) leak_pub_.publish(leak_msg_);
+  battery_pub_.publish(battery_msg_);
+  leak_pub_.publish(leak_msg_);
 }
 
 // Run a bunch of pre-dive checks, return true if everything looks good

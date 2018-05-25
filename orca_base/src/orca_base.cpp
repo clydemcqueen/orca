@@ -15,6 +15,10 @@ constexpr double DEPTH_HOLD_MAX = 50;   // Max depth is 100m, but provide a marg
 // Message publish rate in Hz
 constexpr int SPIN_RATE = 10;
 
+// Timeouts
+constexpr double COMM_ERROR_TIMEOUT_DISARM = 5; // Disarm if we can't communicate with the topside
+constexpr double COMM_ERROR_TIMEOUT_SOS = 100;  // Panic if it's been too long
+
 struct Thruster
 {
   std::string frame_id;   // URDF link frame id
@@ -98,8 +102,10 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
 
   // Set up all subscriptions
   baro_sub_ = nh_priv_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
+  battery_sub_ = nh_priv_.subscribe<orca_msgs::Battery>("/orca_driver/battery", 10, &OrcaBase::batteryCallback, this);
   imu_sub_ = nh_priv_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_priv_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
+  leak_sub_ = nh_priv_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaBase::leakCallback, this);
   ping_sub_ = nh_priv_.subscribe<std_msgs::Empty>("/ping", 10, &OrcaBase::pingCallback, this);
 
   // Advertise all topics that we'll publish on
@@ -122,6 +128,16 @@ void OrcaBase::baroCallback(const orca_msgs::Barometer::ConstPtr& baro_msg)
   else
   {
     depth_state_ = baro_msg->depth - depth_adjustment_;
+  }
+}
+
+// New battery reading
+void OrcaBase::batteryCallback(const orca_msgs::Battery::ConstPtr& battery_msg)
+{
+  if (battery_msg->low_battery)
+  {
+    ROS_ERROR("SOS! Low battery! %g volts", battery_msg->voltage);
+    setMode(orca_msgs::Control::sos);
   }
 }
 
@@ -168,6 +184,16 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   {
     imu_ready_ = true;
     ROS_INFO("IMU ready, roll %4.2f pitch %4.2f yaw %4.2f", roll, pitch, yaw_state_);
+  }
+}
+
+// Leak detector
+void OrcaBase::leakCallback(const orca_msgs::Leak::ConstPtr& leak_msg)
+{
+  if (leak_msg->leak_detected)
+  {
+    ROS_ERROR("SOS! Leak detected!");
+    setMode(orca_msgs::Control::sos);
   }
 }
 
@@ -270,11 +296,15 @@ void OrcaBase::publishControl()
 }
 
 // Change operation mode
-void OrcaBase::setMode(uint8_t mode)
+void OrcaBase::setMode(uint8_t new_mode)
 {
-  mode_ = mode;  
+  if (auvOperation() && rovMode(new_mode))
+  {
+    // AUV to ROV transition, start the communication clock
+    ping_time_ = ros::Time::now();
+  }
 
-  if (holdingDepth())
+  if (depthHoldMode(new_mode))
   {
     // Set target depth
     depth_setpoint_ = depth_state_;
@@ -284,7 +314,7 @@ void OrcaBase::setMode(uint8_t mode)
     depth_trim_button_previous_ = false;
   }
 
-  if (holdingHeading())
+  if (headingHoldMode(new_mode))
   {
     // Set target angle
     yaw_setpoint_ = yaw_state_;
@@ -294,10 +324,19 @@ void OrcaBase::setMode(uint8_t mode)
     yaw_trim_button_previous_ = false;
   }
 
-  if (mode == orca_msgs::Control::disarmed)
+  if (new_mode == orca_msgs::Control::disarmed)
   {
-    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = brightness_ = 0.0; // TODO type mismatch
+    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = 0.0;
+    brightness_ = 0;
   }
+
+  // TODO auv_plan
+  // TODO auv_run
+  // TODO auv_return
+  // TODO sos
+
+  // Set the new mode
+  mode_ = new_mode;
 }
 
 // New input from the gamepad
@@ -305,6 +344,13 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 {
   // A joystick message means that we're talking to the topside
   ping_time_ = ros::Time::now();
+
+  // If we're in trouble, ignore the joystick
+  if (mode_ == orca_msgs::Control::sos)
+  {
+    ROS_INFO("SOS, ignoring joystick");
+    return;
+  }
 
   // Arm/disarm
   if (joy_msg->buttons[joy_button_disarm_])
@@ -321,7 +367,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   // If we're disarmed, ignore everything else
   if (mode_ == orca_msgs::Control::disarmed)
   {
-    ROS_INFO("Disarmed, ignoring further input");    
+    ROS_INFO("Disarmed, ignoring further input");
     return;
   }
 
@@ -361,7 +407,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     {
       ROS_INFO("Hold heading and depth");
       setMode(orca_msgs::Control::hold_hd);
-      }
+    }
     else
     {
       ROS_ERROR("Barometer and/or IMU not ready, can't hold heading and depth");
@@ -392,7 +438,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     // Rising edge
     if (holdingDepth())
     {
-      depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
+      depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_,
         DEPTH_HOLD_MIN, DEPTH_HOLD_MAX);
       depth_controller_.setTarget(depth_setpoint_);
     }
@@ -421,7 +467,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   // Lights
   if ((joy_msg->buttons[joy_button_bright_] || joy_msg->buttons[joy_button_dim_]) && !brightness_trim_button_previous_)
   {
-  // Rising edge
+    // Rising edge
     brightness_ = clamp(joy_msg->buttons[joy_button_bright_] ? brightness_ + inc_lights_ : brightness_ - inc_lights_, BRIGHTNESS_MIN, BRIGHTNESS_MAX);
     brightness_trim_button_previous_ = true;
   }
@@ -432,15 +478,18 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 
   // Thrusters
-  forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
-  if (!holdingHeading())
+  if (rovOperation())
   {
-    yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
-  }
-  strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
-  if (!holdingDepth())
-  {
-    vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
+    forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
+    if (!holdingHeading())
+    {
+      yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
+    }
+    strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
+    if (!holdingDepth())
+    {
+      vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
+    }
   }
 }
 
@@ -451,11 +500,19 @@ void OrcaBase::spinOnce()
   double dt = (now - prev_loop_time_).toSec();
   prev_loop_time_ = now;
 
-  // If we're not getting messages from the topside, disarm and wait TODO handle ROV vs AUV case
-  if (now - ping_time_ > ros::Duration(5.0) && mode_ != orca_msgs::Control::disarmed)
+  // Check for communication problems
+  if (rovOperation() && now - ping_time_ > ros::Duration(COMM_ERROR_TIMEOUT_DISARM))
   {
-    ROS_ERROR("Lost contact with topside; disarming");
-    setMode(orca_msgs::Control::disarmed);
+    if (now - ping_time_ > ros::Duration(COMM_ERROR_TIMEOUT_SOS))
+    {
+      ROS_ERROR("SOS! Lost contact for way too long");
+      setMode(orca_msgs::Control::sos);
+    }
+    else
+    {
+      ROS_ERROR("Lost contact with topside; disarming");
+      setMode(orca_msgs::Control::disarmed);
+    }
   }
 
   // Compute yaw effort

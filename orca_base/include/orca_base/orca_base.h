@@ -9,11 +9,17 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 #include "orca_msgs/Barometer.h"
+#include "orca_msgs/Battery.h"
 #include "orca_msgs/Control.h"
+#include "orca_msgs/Leak.h"
 #include "orca_base/pid.h"
 
-
 namespace orca_base {
+
+constexpr const bool headingHoldMode(uint8_t mode) { return mode == orca_msgs::Control::hold_h || mode == orca_msgs::Control::hold_hd; };
+constexpr const bool depthHoldMode(uint8_t mode) { return mode == orca_msgs::Control::hold_d || mode == orca_msgs::Control::hold_hd; };
+constexpr const bool rovMode(uint8_t mode) { return mode == orca_msgs::Control::manual || mode == orca_msgs::Control::hold_h || mode == orca_msgs::Control::hold_d || mode == orca_msgs::Control::hold_hd; }
+constexpr const bool auvMode(uint8_t mode) { return mode == orca_msgs::Control::auv_plan || mode == orca_msgs::Control::auv_run || mode == orca_msgs::Control::auv_return; }
 
 // OrcaBase provides basic ROV and AUV functions, including joystick operation, heading hold, depth hold, and waypoint navigation.
 class OrcaBase
@@ -103,14 +109,18 @@ private:
 
   // Subscriptions
   ros::Subscriber baro_sub_;
+  ros::Subscriber battery_sub_;
   ros::Subscriber imu_sub_;
   ros::Subscriber joy_sub_;
+  ros::Subscriber leak_sub_;
   ros::Subscriber ping_sub_;
-  
+
   // Callbacks
   void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
+  void batteryCallback(const orca_msgs::Battery::ConstPtr &msg);
   void imuCallback(const sensor_msgs::ImuConstPtr &msg);
-  void joyCallback(const sensor_msgs::Joy::ConstPtr& msg);
+  void joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg);
+  void leakCallback(const orca_msgs::Leak::ConstPtr& msg);
   void pingCallback(const std_msgs::Empty::ConstPtr& msg);
   
   // Publications
@@ -122,9 +132,11 @@ private:
   // Helpers
   void publishControl();
   void publishOdom();
-  void setMode(uint8_t mode);
-  bool holdingHeading() { return mode_ == orca_msgs::Control::hold_h || mode_ == orca_msgs::Control::hold_hd; };
-  bool holdingDepth() { return mode_ == orca_msgs::Control::hold_d || mode_ == orca_msgs::Control::hold_hd; };
+  void setMode(uint8_t new_mode);
+  bool holdingHeading() { return headingHoldMode(mode_); };
+  bool holdingDepth() { return depthHoldMode(mode_); };
+  bool rovOperation() { return rovMode(mode_); };
+  bool auvOperation() { return auvMode(mode_); };
 
 public:
   explicit OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::TransformListener &tf);
