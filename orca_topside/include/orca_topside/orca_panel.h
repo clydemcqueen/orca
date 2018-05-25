@@ -43,31 +43,17 @@ protected:
   QPalette alert_palette_;
   QPalette danger_palette_;
 
-  bool depth_pid_enabled_;
-  bool yaw_pid_enabled_;
-
-  double depth_setpoint_;
-  double heading_setpoint_;
-
   ros::Subscriber baro_sub_;
   ros::Subscriber battery_sub_;
   ros::Subscriber control_sub_;
-  ros::Subscriber depth_pid_enable_sub_;
-  ros::Subscriber depth_setpoint_sub_;
   ros::Subscriber leak_sub_;
   ros::Subscriber proc_sub_;
-  ros::Subscriber yaw_pid_enable_sub_;
-  ros::Subscriber yaw_setpoint_sub_;
 
   void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
   void batteryCallback(const orca_msgs::Battery::ConstPtr &msg);
   void controlCallback(const orca_msgs::Control::ConstPtr &msg);
-  void depthPidEnableCallback(const std_msgs::Bool::ConstPtr &msg);
-  void depthSetpointCallback(const std_msgs::Float64::ConstPtr &msg);
   void leakCallback(const orca_msgs::Leak::ConstPtr &msg);
   void procCallback(const orca_msgs::Proc::ConstPtr &msg);
-  void yawPidEnableCallback(const std_msgs::Bool::ConstPtr &msg);
-  void yawSetpointCallback(const std_msgs::Float64::ConstPtr &msg);
 
   void timerCallback(const ros::TimerEvent &event);
 };

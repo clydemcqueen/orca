@@ -24,11 +24,7 @@ constexpr const double yaw2heading(double yaw)
   return 90.0 + declination - qRadiansToDegrees(yaw);
 }
 
-OrcaPanel::OrcaPanel(QWidget* parent) : rviz::Panel(parent),
-  depth_pid_enabled_{false},
-  yaw_pid_enabled_{false},
-  depth_setpoint_{0},
-  heading_setpoint_{0}
+OrcaPanel::OrcaPanel(QWidget* parent) : rviz::Panel(parent)
 {
   ROS_DEBUG("Constructing OrcaPanel");
 
@@ -86,12 +82,8 @@ OrcaPanel::OrcaPanel(QWidget* parent) : rviz::Panel(parent),
   baro_sub_ = nh_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaPanel::baroCallback, this);
   battery_sub_ = nh_.subscribe<orca_msgs::Battery>("/orca_driver/battery", 10, &OrcaPanel::batteryCallback, this);
   control_sub_ = nh_.subscribe<orca_msgs::Control>("/orca_base/control", 10, &OrcaPanel::controlCallback, this);
-  depth_pid_enable_sub_ = nh_.subscribe<std_msgs::Bool>("/depth_pid/pid_enable", 10, &OrcaPanel::depthPidEnableCallback, this);
-  depth_setpoint_sub_ = nh_.subscribe<std_msgs::Float64>("/depth_pid/setpoint", 10, &OrcaPanel::depthSetpointCallback, this);
   leak_sub_ = nh_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaPanel::leakCallback, this);
   proc_sub_ = nh_.subscribe<orca_msgs::Proc>("/proc", 10, &OrcaPanel::procCallback, this);
-  yaw_pid_enable_sub_ = nh_.subscribe<std_msgs::Bool>("/yaw_pid/pid_enable", 10, &OrcaPanel::yawPidEnableCallback, this);
-  yaw_setpoint_sub_ = nh_.subscribe<std_msgs::Float64>("/yaw_pid/setpoint", 10, &OrcaPanel::yawSetpointCallback, this);
 
   timer_ = nh_.createTimer(ros::Duration(0.1), &OrcaPanel::timerCallback, this);
 
@@ -145,16 +137,6 @@ void OrcaPanel::controlCallback(const orca_msgs::Control::ConstPtr &msg)
   }
 }
 
-void OrcaPanel::depthPidEnableCallback(const std_msgs::Bool::ConstPtr &msg)
-{
-  depth_pid_enabled_ = msg->data;
-}
-
-void OrcaPanel::depthSetpointCallback(const std_msgs::Float64::ConstPtr &msg)
-{
-  depth_setpoint_ = msg->data;
-}
-
 void OrcaPanel::leakCallback(const orca_msgs::Leak::ConstPtr &msg)
 {
   leak_viewer_->setText(QString(msg->leak_detected ? "LEAK LEAK LEAK LEAK" : "No leak"));
@@ -165,16 +147,6 @@ void OrcaPanel::procCallback(const orca_msgs::Proc::ConstPtr &msg)
 {
   proc_viewer_->setText(QString("Processor temp %1°").arg(msg->cpu_temp, -1, 'f', 1));
   proc_viewer_->setPalette(msg->cpu_temp < 70 ? ok_palette_ : (msg->cpu_temp < 80 ? alert_palette_ : danger_palette_));
-}
-
-void OrcaPanel::yawPidEnableCallback(const std_msgs::Bool::ConstPtr &msg)
-{
-  yaw_pid_enabled_ = msg->data;
-}
-
-void OrcaPanel::yawSetpointCallback(const std_msgs::Float64::ConstPtr &msg)
-{
-  heading_setpoint_ = yaw2heading(msg->data);
 }
 
 void OrcaPanel::timerCallback(const ros::TimerEvent &event)
@@ -191,10 +163,7 @@ void OrcaPanel::timerCallback(const ros::TimerEvent &event)
       // Odom depth is based on the Bar30 reading, but it's zeroed out on boot
       double depth = -transform.getOrigin().getZ();
 
-      QString depth_string = depth_pid_enabled_ ?
-        QString("Depth %1m (%2)").arg(depth, -1, 'f', 2).arg(depth_setpoint_, -1, 'f', 2) :
-        QString("Depth %1m").arg(depth, -1, 'f', 2);
-
+      QString depth_string = QString("Depth %1m").arg(depth, -1, 'f', 2);
       depth_viewer_->setText(depth_string);
 
       // Pull out the yaw and compute a compass heading
@@ -203,10 +172,7 @@ void OrcaPanel::timerCallback(const ros::TimerEvent &event)
       tf::Matrix3x3(orientation).getRPY(roll, pitch, yaw);
       double heading = yaw2heading(yaw);
 
-      QString heading_string = yaw_pid_enabled_ ?
-        QString("Heading %1° (%2)").arg(heading, -1, 'f', 0).arg(heading_setpoint_, -1, 'f', 0) :
-        QString("Heading %1°").arg(heading, -1, 'f', 0);
-
+      QString heading_string = QString("Heading %1°").arg(heading, -1, 'f', 0);
       yaw_viewer_->setText(heading_string);
     }
     catch (const std::exception &ex)

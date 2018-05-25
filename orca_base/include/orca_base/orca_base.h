@@ -10,6 +10,8 @@
 #include <tf2_ros/transform_listener.h>
 #include "orca_msgs/Barometer.h"
 #include "orca_msgs/Control.h"
+#include "orca_base/pid.h"
+
 
 namespace orca_base {
 
@@ -48,24 +50,33 @@ private:
   tf2::Quaternion imu_rotation_;
 
   // General state
-  bool simulation_;
-  uint8_t mode_;
-  bool imu_ready_;                    // True if we've received at least one imu message
-  bool barometer_ready_;              // True if we've received at least one barometer message
-  tf2::Quaternion base_orientation_;  // Current orientation
-  double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
+  bool simulation_;                   // True if we're in a simulation
   ros::Time ping_time_;               // Last time we heard from the topside
-  ros::Time imu_msg_time_;            // Time of last imu message
-  tf2::Vector3 angular_velocity_;     // Angular velocity
-  tf2::Vector3 linear_velocity_;      // Estimated linear velocity
-  tf2::Vector3 position_;             // Estimated position
+  ros::Time prev_loop_time_;          // Last time spinOnce was called
+  uint8_t mode_;                      // Operating mode
 
-  // Yaw pid control state
+  // Pose
+  tf2::Vector3 position_;             // Position
+  tf2::Quaternion base_orientation_;  // Orientation
+  tf2::Vector3 linear_velocity_;      // Linear velocity
+  tf2::Vector3 angular_velocity_;     // Angular velocity
+
+  // Imu
+  bool imu_ready_;                    // True if we've received at least one imu message
+  ros::Time imu_msg_time_;            // Time of last imu message
+  double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
+
+  // Barometer
+  bool barometer_ready_;              // True if we've received at least one barometer message
+
+  // Yaw controller
+  pid::Controller yaw_controller_;
   double yaw_state_;
   double yaw_setpoint_;
   bool yaw_trim_button_previous_;
 
-  // Depth pid control state
+  // Depth controller
+  pid::Controller depth_controller_;
   double depth_adjustment_;
   double depth_state_;
   double depth_setpoint_;
@@ -93,36 +104,22 @@ private:
   // Subscriptions
   ros::Subscriber baro_sub_;
   ros::Subscriber imu_sub_;
-  ros::Subscriber yaw_control_effort_sub_;
-  ros::Subscriber depth_control_effort_sub_;
   ros::Subscriber joy_sub_;
   ros::Subscriber ping_sub_;
   
   // Callbacks
   void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
   void imuCallback(const sensor_msgs::ImuConstPtr &msg);
-  void yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg);
-  void depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg);
   void joyCallback(const sensor_msgs::Joy::ConstPtr& msg);
   void pingCallback(const std_msgs::Empty::ConstPtr& msg);
   
   // Publications
-  ros::Publisher yaw_pid_enable_pub_;
-  ros::Publisher yaw_state_pub_;
-  ros::Publisher yaw_setpoint_pub_;
-  ros::Publisher depth_pid_enable_pub_;
-  ros::Publisher depth_state_pub_;
-  ros::Publisher depth_setpoint_pub_;
   ros::Publisher control_pub_;
   ros::Publisher marker_pub_;
   ros::Publisher odom_pub_;
   tf2_ros::TransformBroadcaster tf_broadcaster_;
   
   // Helpers
-  void publishYawSetpoint();
-  void publishDepthSetpoint();
-  void publishYawPidEnable(bool enable);
-  void publishDepthPidEnable(bool enable);
   void publishControl();
   void publishOdom();
   void setMode(uint8_t mode);

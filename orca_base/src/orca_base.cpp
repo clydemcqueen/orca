@@ -50,7 +50,10 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   tilt_trim_button_previous_{false},
   brightness_{0},
   brightness_trim_button_previous_{false},
-  ping_time_{ros::Time::now()}
+  ping_time_{ros::Time::now()},
+  prev_loop_time_{ros::Time::now()},
+  depth_controller_{false, 0.1, 0, 0.05},
+  yaw_controller_{true, 0.007, 0, 0}
 {
   nh_priv_.param("joy_axis_yaw", joy_axis_yaw_, 0);                      // Left stick left/right; 1.0 is left and -1.0 is right
   nh_priv_.param("joy_axis_forward", joy_axis_forward_, 1);              // Left stick up/down; 1.0 is forward and -1.0 is backward
@@ -97,24 +100,12 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   baro_sub_ = nh_priv_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
   imu_sub_ = nh_priv_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_priv_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
-  yaw_control_effort_sub_ = nh_priv_.subscribe<std_msgs::Float64>("/yaw_pid/control_effort", 10, &OrcaBase::yawControlEffortCallback, this);
-  depth_control_effort_sub_ = nh_priv_.subscribe<std_msgs::Float64>("/depth_pid/control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
   ping_sub_ = nh_priv_.subscribe<std_msgs::Empty>("/ping", 10, &OrcaBase::pingCallback, this);
 
   // Advertise all topics that we'll publish on
   control_pub_ = nh_priv_.advertise<orca_msgs::Control>("control", 1);
   marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("rviz_marker_array", 1);
-  yaw_pid_enable_pub_ = nh_priv_.advertise<std_msgs::Bool>("/yaw_pid/pid_enable", 1);
-  yaw_state_pub_ = nh_priv_.advertise<std_msgs::Float64>("/yaw_pid/state", 1);
-  yaw_setpoint_pub_ = nh_priv_.advertise<std_msgs::Float64>("/yaw_pid/setpoint", 1);
-  depth_pid_enable_pub_ = nh_priv_.advertise<std_msgs::Bool>("/depth_pid/pid_enable", 1);
-  depth_state_pub_ = nh_priv_.advertise<std_msgs::Float64>("/depth_pid/state", 1);
-  depth_setpoint_pub_ = nh_priv_.advertise<std_msgs::Float64>("/depth_pid/setpoint", 1);
   odom_pub_ = nh_priv_.advertise<nav_msgs::Odometry>("/odom", 1);
-
-  // Disable pid controllers
-  publishYawPidEnable(false);
-  publishDepthPidEnable(false);
 }
 
 // New barometer reading
@@ -180,62 +171,10 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   }
 }
 
-// Result of yaw pid controller
-void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
-{
-  if (holdingHeading())
-  {
-    yaw_effort_ = dead_band(msg->data * stability_, yaw_pid_dead_band_);
-  }
-}
-
-// Result of depth pid controller
-void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
-{
-  if (holdingDepth())
-  {
-    vertical_effort_ = dead_band(-msg->data * stability_, depth_pid_dead_band_);
-  }
-}
-
 // Ping from topside
 void OrcaBase::pingCallback(const std_msgs::Empty::ConstPtr& msg)
 {
   ping_time_ = ros::Time::now();
-}
-
-void OrcaBase::publishYawSetpoint()
-{
-  if (imu_ready_)
-  {
-    std_msgs::Float64 setpoint;
-    setpoint.data = yaw_setpoint_;
-    yaw_setpoint_pub_.publish(setpoint);
-  }
-}
-
-void OrcaBase::publishDepthSetpoint()
-{
-  if (barometer_ready_)
-  {
-    std_msgs::Float64 setpoint;
-    setpoint.data = depth_setpoint_;
-    depth_setpoint_pub_.publish(setpoint);  
-  }
-}
-
-void OrcaBase::publishYawPidEnable(bool enable)
-{
-  std_msgs::Bool msg_enable;
-  msg_enable.data = static_cast<uint8_t>(enable);
-  yaw_pid_enable_pub_.publish(msg_enable);
-}
-
-void OrcaBase::publishDepthPidEnable(bool enable)
-{
-  std_msgs::Bool msg_enable;
-  msg_enable.data = static_cast<uint8_t>(enable);
-  depth_pid_enable_pub_.publish(msg_enable);
 }
 
 void OrcaBase::publishOdom()
@@ -339,41 +278,25 @@ void OrcaBase::setMode(uint8_t mode)
   {
     // Set target depth
     depth_setpoint_ = depth_state_;
-    publishDepthSetpoint();
-
-    // Turn on depth pid controller
-    publishDepthPidEnable(true);
+    depth_controller_.setTarget(depth_setpoint_);
 
     // Clear button state
     depth_trim_button_previous_ = false;
-  }
-  else
-  {
-    // Turn off depth pid controller
-    publishDepthPidEnable(false);
   }
 
   if (holdingHeading())
   {
     // Set target angle
     yaw_setpoint_ = yaw_state_;
-    publishYawSetpoint();
-
-    // Turn on yaw pid controller
-    publishYawPidEnable(true);
+    yaw_controller_.setTarget(yaw_setpoint_);
 
     // Clear button state
     yaw_trim_button_previous_ = false;
   }
-  else
-  {
-    // Turn off yaw pid controller
-    publishYawPidEnable(false);
-  }
 
   if (mode == orca_msgs::Control::disarmed)
   {
-    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = brightness_ = 0.0;
+    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = brightness_ = 0.0; // TODO type mismatch
   }
 }
 
@@ -452,7 +375,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     if ((holdingHeading()))
     {
       yaw_setpoint_ = joy_msg->axes[joy_axis_yaw_trim_] > 0.0 ? yaw_setpoint_ + inc_yaw_ : yaw_setpoint_ - inc_yaw_;
-      publishYawSetpoint();
+      yaw_controller_.setTarget(yaw_setpoint_);
     }
 
     yaw_trim_button_previous_ = true;
@@ -471,7 +394,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     {
       depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
         DEPTH_HOLD_MIN, DEPTH_HOLD_MAX);
-      publishDepthSetpoint();
+      depth_controller_.setTarget(depth_setpoint_);
     }
 
     depth_trim_button_previous_ = true;
@@ -524,27 +447,29 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 // Our main loop
 void OrcaBase::spinOnce()
 {
-  // If we're not getting messages from the topside, disarm and wait
-  if (ros::Time::now() - ping_time_ > ros::Duration(5.0) && mode_ != orca_msgs::Control::disarmed)
+  ros::Time now = ros::Time::now();
+  double dt = (now - prev_loop_time_).toSec();
+  prev_loop_time_ = now;
+
+  // If we're not getting messages from the topside, disarm and wait TODO handle ROV vs AUV case
+  if (now - ping_time_ > ros::Duration(5.0) && mode_ != orca_msgs::Control::disarmed)
   {
     ROS_ERROR("Lost contact with topside; disarming");
     setMode(orca_msgs::Control::disarmed);
   }
 
-  // Publish yaw state
+  // Compute yaw effort
   if (holdingHeading())
   {
-    std_msgs::Float64 yaw_state;
-    yaw_state.data = yaw_state_;
-    yaw_state_pub_.publish(yaw_state);
+    double effort = yaw_controller_.calc(yaw_state_, dt, 0);
+    yaw_effort_ = dead_band(effort * stability_, yaw_pid_dead_band_);
   }
 
-  // Publish depth state
+  // Compute depth effort
   if (holdingDepth())
   {
-    std_msgs::Float64 depth_state;
-    depth_state.data = depth_state_;
-    depth_state_pub_.publish(depth_state);
+    double effort = depth_controller_.calc(depth_state_, dt, 0);
+    vertical_effort_ = dead_band(-effort * stability_, depth_pid_dead_band_);
   }
 
   // Publish controls for thrusters, lights and camera tilt
