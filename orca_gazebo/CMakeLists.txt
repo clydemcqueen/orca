@@ -44,3 +44,7 @@ target_link_libraries(ThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_library(BarometerPlugin src/barometer_plugin.cpp)
 add_dependencies(BarometerPlugin ${catkin_EXPORTED_TARGETS})
 target_link_libraries(BarometerPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_library(SubmersibleGPSPlugin src/submersible_gps_plugin.cpp)
+add_dependencies(SubmersibleGPSPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(SubmersibleGPSPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})

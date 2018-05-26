@@ -252,4 +252,16 @@
     </sensor>
   </gazebo>
 
+  <!--
+    The GPSPlugin (provided by Orca) simulates a GPS receiver attached to an ROV.
+    When it goes underwater, the GPS signal is lost.
+  -->
+  <gazebo>
+    <plugin name="SubmersibleGPSPlugin" filename="libSubmersibleGPSPlugin.so">
+      <link name="base_link">
+        <ros_topic>/gps</ros_topic>
+      </link>
+    </plugin>
+  </gazebo>
+
 </robot>
