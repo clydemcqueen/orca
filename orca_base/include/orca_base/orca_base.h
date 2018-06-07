@@ -2,6 +2,7 @@
 #define ORCA_BASE_H
 
 #include <ros/ros.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Joy.h>
@@ -12,14 +13,16 @@
 #include "orca_msgs/Battery.h"
 #include "orca_msgs/Control.h"
 #include "orca_msgs/Leak.h"
+#include "orca_base/orca_model.h"
 #include "orca_base/pid.h"
+#include "orca_base/orca_mission.h"
 
 namespace orca_base {
 
 constexpr const bool headingHoldMode(uint8_t mode) { return mode == orca_msgs::Control::hold_h || mode == orca_msgs::Control::hold_hd; };
 constexpr const bool depthHoldMode(uint8_t mode) { return mode == orca_msgs::Control::hold_d || mode == orca_msgs::Control::hold_hd; };
 constexpr const bool rovMode(uint8_t mode) { return mode == orca_msgs::Control::manual || mode == orca_msgs::Control::hold_h || mode == orca_msgs::Control::hold_d || mode == orca_msgs::Control::hold_hd; }
-constexpr const bool auvMode(uint8_t mode) { return mode == orca_msgs::Control::auv_plan || mode == orca_msgs::Control::auv_run || mode == orca_msgs::Control::auv_return; }
+constexpr const bool auvMode(uint8_t mode) { return mode == orca_msgs::Control::mission; }
 
 // OrcaBase provides basic ROV and AUV functions, including joystick operation, heading hold, depth hold, and waypoint navigation.
 class OrcaBase
@@ -60,20 +63,21 @@ private:
   ros::Time ping_time_;               // Last time we heard from the topside
   ros::Time prev_loop_time_;          // Last time spinOnce was called
   uint8_t mode_;                      // Operating mode
-
-  // Pose
-  tf2::Vector3 position_;             // Position
-  tf2::Quaternion base_orientation_;  // Orientation
-  tf2::Vector3 linear_velocity_;      // Linear velocity
-  tf2::Vector3 angular_velocity_;     // Angular velocity
-
-  // Imu
-  bool imu_ready_;                    // True if we've received at least one imu message
-  ros::Time imu_msg_time_;            // Time of last imu message
-  double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
+  RotateMotion motion_;               // TODO should have a ref to the base class, then we can alloc
 
   // Barometer
-  bool barometer_ready_;              // True if we've received at least one barometer message
+  bool barometer_ready_;              // True if we're receiving barometer messages
+
+  // GPS
+  bool gps_ready_;                    // True if we're receiving GPS messages
+  ros::Time gps_msg_time_;            // Time of last GPS message
+  tf2::Vector3 gps_position_;         // Last GPS reading
+
+  // IMU
+  bool imu_ready_;                    // True if we're receiving IMU messages
+  ros::Time imu_msg_time_;            // Time of last IMU message
+  tf2::Quaternion base_orientation_;  // Orientation
+  double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
 
   // Yaw controller
   pid::Controller yaw_controller_;
@@ -94,10 +98,7 @@ private:
   double vertical_gain_;
 
   // Thruster effort from joystick or pid controllers (yaw and depth), ranges from 1.0 for forward to -1.0 for reverse
-  double forward_effort_;
-  double yaw_effort_;
-  double strafe_effort_;
-  double vertical_effort_;
+  OrcaEfforts efforts_;
 
   // Camera tilt
   int tilt_;
@@ -110,6 +111,8 @@ private:
   // Subscriptions
   ros::Subscriber baro_sub_;
   ros::Subscriber battery_sub_;
+  ros::Subscriber goal_sub_;
+  ros::Subscriber gps_sub_;
   ros::Subscriber imu_sub_;
   ros::Subscriber joy_sub_;
   ros::Subscriber leak_sub_;
@@ -118,10 +121,12 @@ private:
   // Callbacks
   void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
   void batteryCallback(const orca_msgs::Battery::ConstPtr &msg);
-  void imuCallback(const sensor_msgs::ImuConstPtr &msg);
-  void joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg);
-  void leakCallback(const orca_msgs::Leak::ConstPtr& msg);
-  void pingCallback(const std_msgs::Empty::ConstPtr& msg);
+  void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
+  void gpsCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg);
+  void imuCallback(const sensor_msgs::Imu::ConstPtr &msg);
+  void joyCallback(const sensor_msgs::Joy::ConstPtr &msg);
+  void leakCallback(const orca_msgs::Leak::ConstPtr &msg);
+  void pingCallback(const std_msgs::Empty::ConstPtr &msg);
   
   // Publications
   ros::Publisher control_pub_;

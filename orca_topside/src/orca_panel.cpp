@@ -131,14 +131,8 @@ void OrcaPanel::controlCallback(const orca_msgs::Control::ConstPtr &msg)
     case orca_msgs::Control::hold_hd:
       mode_viewer_->setText("Hold heading and depth");
       break;
-    case orca_msgs::Control::auv_plan:
-      mode_viewer_->setText("Planning mission");
-      break;
-    case orca_msgs::Control::auv_run:
+    case orca_msgs::Control::mission:
       mode_viewer_->setText("Running mission");
-      break;
-    case orca_msgs::Control::auv_return:
-      mode_viewer_->setText("Returning from mission");
       break;
     case orca_msgs::Control::sos:
       mode_viewer_->setText("SOS!");

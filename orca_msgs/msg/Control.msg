@@ -7,9 +7,7 @@ uint8 manual=1      # Manual thruster control
 uint8 hold_h=2      # Autopilot is controlling heading
 uint8 hold_d=3      # Autopilot is controlling depth
 uint8 hold_hd=4     # Autopilot is controlling heading and depth
-uint8 auv_plan=5    # Autopilot is planning a mission, and will switch to auv_run when ready
-uint8 auv_run=6     # Autopilot is running the planned mission, and will switch to auv_return when complete
-uint8 auv_return=7  # Autopilot is returning to the start point, and will switch to manual when it arrives
+uint8 mission=5     # Autopilot is running a mission, and will switch to manual when complete
 uint8 sos=99        # Thrusters are off, joystick is ignored, lights and radios are calling for help
 uint8 mode
 

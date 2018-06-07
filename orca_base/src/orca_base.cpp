@@ -46,10 +46,6 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   mode_{orca_msgs::Control::disarmed},
   imu_ready_{false},
   barometer_ready_{false},
-  forward_effort_{0},
-  yaw_effort_{0},
-  strafe_effort_{0},
-  vertical_effort_{0},
   tilt_{0},
   tilt_trim_button_previous_{false},
   brightness_{0},
@@ -91,18 +87,23 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_priv_.param("simulation", simulation_, true);
   if (simulation_)
   {
+    ROS_INFO("Running in a simulation");
     imu_rotation_ = tf2::Quaternion::getIdentity();
   }
   else
   {
+    ROS_INFO("Running in real life");
     tf2::Quaternion imu_orientation;
     imu_orientation.setRPY(-M_PI/2, -M_PI/2, 0);
     imu_rotation_ =  imu_orientation.inverse();
   }
+  ROS_INFO("base_orientation = imu_orientation * {%g, %g, %g, %g}", imu_rotation_.x(), imu_rotation_.y(), imu_rotation_.z(), imu_rotation_.w());
 
   // Set up all subscriptions
   baro_sub_ = nh_priv_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
   battery_sub_ = nh_priv_.subscribe<orca_msgs::Battery>("/orca_driver/battery", 10, &OrcaBase::batteryCallback, this);
+  goal_sub_ = nh_priv_.subscribe<geometry_msgs::PoseStamped>("/move_base_simple/goal", 10, &OrcaBase::goalCallback, this);
+  gps_sub_ = nh_priv_.subscribe<geometry_msgs::Vector3Stamped>("/gps", 10, &OrcaBase::gpsCallback, this);
   imu_sub_ = nh_priv_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_priv_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   leak_sub_ = nh_priv_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaBase::leakCallback, this);
@@ -141,10 +142,51 @@ void OrcaBase::batteryCallback(const orca_msgs::Battery::ConstPtr& battery_msg)
   }
 }
 
-// New imu reading
+// New 2D goal
+void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
+{
+  if (mode_ != orca_msgs::Control::disarmed && barometer_ready_ && gps_ready_ && imu_ready_)
+  {
+    // Pull out yaw (kinda cumbersome)
+    tf2::Quaternion goal_orientation;
+    tf2::fromMsg(msg->pose.orientation, goal_orientation);
+    double roll, pitch, yaw;
+    tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, yaw);
+
+    ROS_INFO("Start mission, goal is (%g, %g), heading %g", msg->pose.position.x, msg->pose.position.y, yaw);
+
+    motion_.init(MotionState(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_), MotionState(msg->pose.position.x, msg->pose.position.y, SURFACE_DEPTH, yaw));
+    setMode(orca_msgs::Control::mission);
+  }
+  else
+  {
+    ROS_ERROR("Can't start mission; possible reasons: disarmed, barometer not ready, GPS not ready, IMU not ready");
+  }
+}
+
+// New GPS reading
+void OrcaBase::gpsCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg)
+{
+  // Note the time
+  gps_msg_time_ = msg->header.stamp;
+
+  // Save the reading
+  gps_position_.setValue(msg->vector.x, msg->vector.y, msg->vector.z);
+
+  if (!gps_ready_)
+  {
+    gps_ready_ = true;
+    ROS_INFO("GPS ready (%g, %g, %g)", msg->vector.x, msg->vector.y, msg->vector.z);
+  }
+}
+
+// New IMU reading
 void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 {
-  // IMU orientation, rotated to account for the placement in the ROV
+  // Note the time
+  imu_msg_time_ = msg->header.stamp;
+
+  // Compute base_orientation
   tf2::Quaternion imu_orientation;
   tf2::fromMsg(msg->orientation, imu_orientation);
   if (simulation_)
@@ -154,31 +196,18 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   }
   base_orientation_ = imu_orientation * imu_rotation_;
 
+  // Pull out yaw
   double roll, pitch;
   tf2::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
-
-  // NWU to ENU
-  yaw_state_ += M_PI_2;
-  base_orientation_.setRPY(roll, pitch, yaw_state_);
 
   // Compute a stability metric, used to throttle the pid controllers
   stability_ = std::min(clamp(std::cos(roll), 0.0, 1.0), clamp(std::cos(pitch), 0.0, 1.0));
 
-  // Estimate position -- experimental
-  if (imu_ready_)
-  {
-    tf2::Vector3 linear_acceleration;
-    tf2::fromMsg(msg->linear_acceleration, linear_acceleration);
-    double west = linear_acceleration.y();
-    linear_acceleration.setY(linear_acceleration.x()); // NWU to ENU
-    linear_acceleration.setX(-west); // NWU to ENU
-    tf2::fromMsg(msg->angular_velocity, angular_velocity_);// TODO NWU to ENU?
-    // TODO get covariance
-    double delta = (msg->header.stamp - imu_msg_time_).toSec();
-    linear_velocity_ += linear_acceleration * delta;
-    position_ += linear_velocity_ * delta;
-  }
-  imu_msg_time_ = msg->header.stamp;
+#if 0
+  // NWU to ENU
+  yaw_state_ += M_PI_2;
+  base_orientation_.setRPY(roll, pitch, yaw_state_);
+#endif
 
   if (!imu_ready_)
   {
@@ -218,6 +247,7 @@ void OrcaBase::publishOdom()
     odom_tf.transform.rotation = tf2::toMsg(base_orientation_);
     tf_broadcaster_.sendTransform(odom_tf);
 
+#if 0
     // Publish an odom message
     nav_msgs::Odometry odom_msg;
     odom_msg.header.stamp = imu_msg_time_;
@@ -231,7 +261,10 @@ void OrcaBase::publishOdom()
     odom_msg.twist.twist.linear = tf2::toMsg(linear_velocity_);
     // TODO compute covariance
     odom_pub_.publish(odom_msg);
+#endif
   }
+
+  // TODO publish map => odom from GPS?
 }
 
 void OrcaBase::publishControl()
@@ -241,11 +274,11 @@ void OrcaBase::publishControl()
   for (int i = 0; i < THRUSTERS.size(); ++i)
   {
     // Clamp forward + strafe to xy_gain_
-    double xy_effort = clamp(forward_effort_ * THRUSTERS[i].forward_factor + strafe_effort_ * THRUSTERS[i].strafe_factor,
+    double xy_effort = clamp(efforts_.forward_ * THRUSTERS[i].forward_factor + efforts_.strafe_ * THRUSTERS[i].strafe_factor,
       -xy_gain_, xy_gain_);
 
     // Clamp total thrust
-    thruster_efforts.push_back(clamp(xy_effort + yaw_effort_ * THRUSTERS[i].yaw_factor + vertical_effort_ * THRUSTERS[i].vertical_factor,
+    thruster_efforts.push_back(clamp(xy_effort + efforts_.yaw_ * THRUSTERS[i].yaw_factor + efforts_.vertical_ * THRUSTERS[i].vertical_factor,
       THRUST_FULL_REV, THRUST_FULL_FWD));
   }
 
@@ -298,6 +331,9 @@ void OrcaBase::publishControl()
 // Change operation mode
 void OrcaBase::setMode(uint8_t new_mode)
 {
+  // Stop all thrusters when we change modes
+  efforts_.clear();
+
   if (auvOperation() && rovMode(new_mode))
   {
     // AUV to ROV transition, start the communication clock
@@ -326,13 +362,10 @@ void OrcaBase::setMode(uint8_t new_mode)
 
   if (new_mode == orca_msgs::Control::disarmed)
   {
-    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = 0.0;
+    // Turn off lights
     brightness_ = 0;
   }
 
-  // TODO auv_plan
-  // TODO auv_run
-  // TODO auv_return
   // TODO sos
 
   // Set the new mode
@@ -480,15 +513,15 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   // Thrusters
   if (rovOperation())
   {
-    forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
+    efforts_.forward_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
     if (!holdingHeading())
     {
-      yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
+      efforts_.yaw_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
     }
-    strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
+    efforts_.strafe_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
     if (!holdingDepth())
     {
-      vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
+      efforts_.vertical_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
     }
   }
 }
@@ -519,14 +552,32 @@ void OrcaBase::spinOnce()
   if (holdingHeading())
   {
     double effort = yaw_controller_.calc(yaw_state_, dt, 0);
-    yaw_effort_ = dead_band(effort * stability_, yaw_pid_dead_band_);
+    efforts_.yaw_ = dead_band(effort * stability_, yaw_pid_dead_band_);
   }
 
   // Compute depth effort
   if (holdingDepth())
   {
     double effort = depth_controller_.calc(depth_state_, dt, 0);
-    vertical_effort_ = dead_band(-effort * stability_, depth_pid_dead_band_);
+    efforts_.vertical_ = dead_band(-effort * stability_, depth_pid_dead_band_);
+  }
+
+  // Run a mission
+  if (mode_ == orca_msgs::Control::mission)
+  {
+    if (motion_.advance(MotionState(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_), efforts_))
+    {
+      // TODO deadband?
+      efforts_.forward_ = clamp(efforts_.forward_ * stability_, -1.0, 1.0);
+      efforts_.strafe_ = clamp(efforts_.strafe_ * stability_, -1.0, 1.0);
+      efforts_.vertical_ = clamp(-efforts_.vertical_ * stability_, -1.0, 1.0);
+      efforts_.yaw_ = clamp(efforts_.yaw_ * stability_, -1.0, 1.0);
+    }
+    else
+    {
+      ROS_INFO("Mission complete");
+      setMode(orca_msgs::Control::manual);
+    }
   }
 
   // Publish controls for thrusters, lights and camera tilt

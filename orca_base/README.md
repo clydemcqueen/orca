@@ -1,24 +1,19 @@
 ROV and AUV functionality for [Orca](https://github.com/clydemcqueen/orca).
 
-ROV modes:
+Modes:
 * disarmed: thrusters are off, all joystick buttons except "arm" are ignored
 * manual: thrusters are manually controlled
 * hold_h: the autopilot controls heading
 * hold_d: the autopilot controls depth
 * hold_hd: the autopilot controls heading and depth
-
-AUV modes:
-* auv_plan: the autopilot is planning a mission, and will switch to auv_run when ready
-* auv_run: the autopilot is running the planned mission, and will switch to auv_return when complete
-* auv_return: the autopilot is returning to the start point, and will switch to manual when it arrives
+* mission (AUV mode): the autopilot is running a mission, and will switch to manual when complete
 
 Orca will enter an "sos" mode if a leak or low battery condition is detected.
 In this mode the thrusters are off, the joystick is ignored, and the lights and radios are calling for help.
 
 Orca supports tethered and untethered operation:
-* in ROV modes Orca will disarm if topside communication is lost
-* topside communication is not required for AUV modes
-* if you run Orca without a tether, make sure it's positively buoyant!
+* Orca will disarm if topside communication is lost, except when running a mission
+* if you run without a tether, make sure the vehicle is positively buoyant!
 
 World coordinate frame is ENU (East, North, Up).
 This is the default used by ROS and Gazebo.
