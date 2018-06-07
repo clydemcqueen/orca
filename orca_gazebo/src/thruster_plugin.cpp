@@ -16,7 +16,7 @@ namespace gazebo
 /* A simple thruster plugin. Usage:
  *
  *    <gazebo>
- *      <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so">
+ *      <plugin name="OrcaThrusterPlugin" filename="libOrcaThrusterPlugin.so">
  *        <ros_topic>/control</ros_topic>
  *        <thruster>
  *          <pos_force>50</pos_force>
@@ -47,7 +47,7 @@ namespace gazebo
 constexpr double T200_MAX_POS_FORCE = 110;
 constexpr double T200_MAX_NEG_FORCE = 88;
 
-class ThrusterPlugin : public ModelPlugin
+class OrcaThrusterPlugin : public ModelPlugin
 {
 private:
   // Pointer to our base_link
@@ -104,12 +104,12 @@ public:
     // Make sure that ROS is initialized
     if (!ros::isInitialized())
     {
-      ROS_FATAL_STREAM("ROS isn't initialized, unable to load ThrusterPlugin");
+      ROS_FATAL_STREAM("ROS isn't initialized, unable to load OrcaThrusterPlugin");
       return;
     }
 
     // Create a ROS thread queue
-    callback_thread_ = std::thread(std::bind(&ThrusterPlugin::QueueThread, this));
+    callback_thread_ = std::thread(std::bind(&OrcaThrusterPlugin::QueueThread, this));
 
     // Initialize our ROS node
     nh_.reset(new ros::NodeHandle("thruster_plugin"));
@@ -120,15 +120,15 @@ public:
     {
       ros_topic = sdf->GetElement("ros_topic")->Get<std::string>();
     }
-    ROS_INFO("ThrusterPlugin will listen on ROS topic %s", ros_topic.c_str());
+    ROS_INFO("OrcaThrusterPlugin will listen on ROS topic %s", ros_topic.c_str());
 
     // Subscribe to the topic
     ros::SubscribeOptions so = ros::SubscribeOptions::create<orca_msgs::Control>(ros_topic, 1,
-        boost::bind(&ThrusterPlugin::OnRosMsg, this, _1), ros::VoidPtr(), &callback_queue_);
+        boost::bind(&OrcaThrusterPlugin::OnRosMsg, this, _1), ros::VoidPtr(), &callback_queue_);
     thruster_sub_ = nh_->subscribe(so);
     
     // Listen to the update event. This event is broadcast every simulation iteration.
-    update_connection_ = event::Events::ConnectWorldUpdateBegin(boost::bind(&ThrusterPlugin::OnUpdate, this, _1));
+    update_connection_ = event::Events::ConnectWorldUpdateBegin(boost::bind(&OrcaThrusterPlugin::OnUpdate, this, _1));
     
     // Look for <thruster> tags
     for (sdf::ElementPtr elem = sdf->GetElement("thruster"); elem; elem = elem->GetNextElement("thruster"))
@@ -179,6 +179,7 @@ public:
   }
 
   // Called by the world update start event, up to 1000 times per second.
+  // TODO don't apply thrust force if we're above the surface of the water
   void OnUpdate(const common::UpdateInfo & /*info*/)
   {
     for (Thruster t : thrusters_)
@@ -199,6 +200,6 @@ public:
   }
 };
 
-GZ_REGISTER_MODEL_PLUGIN(ThrusterPlugin)
+GZ_REGISTER_MODEL_PLUGIN(OrcaThrusterPlugin)
 
 }

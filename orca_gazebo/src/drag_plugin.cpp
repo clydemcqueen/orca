@@ -6,7 +6,7 @@
 /* A simple drag plugin. Usage:
  *
  *    <gazebo>
- *      <plugin name="DragPlugin" filename="libDragPlugin.so">
+ *      <plugin name="OrcaDragPlugin" filename="libOrcaDragPlugin.so">
  *        <link name="base_link">
  *          <center_of_mass>0 0 -0.2</center_of_mass>
  *          <tether_attach>-0.5, -0.4, 0</tether_attach>
@@ -63,7 +63,7 @@ constexpr double TETHER_DIAM = 0.008;
 constexpr double TETHER_DRAG_COEFFICIENT = 1.1;
 constexpr double TETHER_DRAG = 0.5 * FLUID_DENSITY * TETHER_DIAM * TETHER_DRAG_COEFFICIENT;
 
-class DragPlugin : public ModelPlugin
+class OrcaDragPlugin : public ModelPlugin
 {
 private:
 
@@ -93,7 +93,7 @@ public:
     std::string link_name {"base_link"};
 
     std::cout << std::endl;
-    std::cout << "DRAG PLUGIN PARAMETERS" << std::endl;
+    std::cout << "ORCA DRAG PLUGIN PARAMETERS" << std::endl;
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << "Default link name: " << link_name << std::endl;
     std::cout << "Default center of mass: " << center_of_mass_ << std::endl;
@@ -140,13 +140,13 @@ public:
         std::cout << "Angular drag: " << angular_drag_ << std::endl;
       }
 
-      if (linkElem->HasElement("tether_drag"))
+      if (linkElem->HasElement("tether_drag")) // TODO should be child of gazebo element, not link element
       {
         tether_drag_ = linkElem->GetElement("tether_drag")->Get<double>();
         std::cout << "Tether drag: " << tether_drag_ << std::endl;
       }
 
-      if (linkElem->HasElement("surface"))
+      if (linkElem->HasElement("surface")) // TODO should be child of gazebo element, not link element
       {
         surface_ = linkElem->GetElement("surface")->Get<double>();
         std::cout << "Surface: " << surface_ << std::endl;
@@ -157,7 +157,7 @@ public:
     GZ_ASSERT(base_link_ != nullptr, "Missing link");
 
     // Listen for the update event. This event is broadcast every simulation iteration.
-    update_connection_ = event::Events::ConnectWorldUpdateBegin(boost::bind(&DragPlugin::OnUpdate, this, _1));
+    update_connection_ = event::Events::ConnectWorldUpdateBegin(boost::bind(&OrcaDragPlugin::OnUpdate, this, _1));
 
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << std::endl;
@@ -191,6 +191,6 @@ public:
   }
 };
 
-GZ_REGISTER_MODEL_PLUGIN(DragPlugin)
+GZ_REGISTER_MODEL_PLUGIN(OrcaDragPlugin)
 
 }

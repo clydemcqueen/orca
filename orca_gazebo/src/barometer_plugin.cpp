@@ -12,7 +12,7 @@ namespace gazebo
 //    <gazebo reference="base_link">
 //      <sensor name="barometer_sensor" type="altimeter">
 //        <update_rate>60</update_rate>
-//        <plugin name="BarometerPlugin" filename="libBarometerPlugin.so">
+//        <plugin name="OrcaBarometerPlugin" filename="libOrcaBarometerPlugin.so">
 //          <ros_topic>/barometer</ros_topic>
 //          <fluid_density>1029</fluid_density>
 //        </plugin>
@@ -23,7 +23,7 @@ namespace gazebo
 // The fluid density is <fluid_density> kg/m^3. Use 997 for freshwater and 1029 for seawater.
 // The model must be spawned at the surface.
 
-class BarometerPlugin : public SensorPlugin
+class OrcaBarometerPlugin : public SensorPlugin
 {
 private:
   // Our parent sensor is an altimeter
@@ -49,7 +49,7 @@ public:
     // Make sure that ROS is initialized
     if (!ros::isInitialized())
     {
-      ROS_FATAL_STREAM("ROS isn't initialized, unable to load BarometerPlugin");
+      ROS_FATAL_STREAM("ROS isn't initialized, unable to load OrcaBarometerPlugin");
       return;
     }
 
@@ -62,7 +62,7 @@ public:
     {
       ros_topic = sdf->GetElement("ros_topic")->Get<std::string>();
     }
-    ROS_INFO("BarometerPlugin will publish on ROS topic %s", ros_topic.c_str());
+    ROS_INFO("OrcaBarometerPlugin will publish on ROS topic %s", ros_topic.c_str());
 
     // Set up ROS publisher
     baro_pub_ = nh_->advertise<orca_msgs::Barometer>(ros_topic, 1);
@@ -80,7 +80,7 @@ public:
     altimeter_ = std::dynamic_pointer_cast<sensors::AltimeterSensor>(sensor);
 
     // Listen to the update event
-    update_connection_ = altimeter_->ConnectUpdated(std::bind(&BarometerPlugin::OnUpdate, this));
+    update_connection_ = altimeter_->ConnectUpdated(std::bind(&OrcaBarometerPlugin::OnUpdate, this));
 
     // Activate the parent sensor
     altimeter_->SetActive(true);
@@ -113,6 +113,6 @@ public:
   }
 };
 
-GZ_REGISTER_SENSOR_PLUGIN(BarometerPlugin)
+GZ_REGISTER_SENSOR_PLUGIN(OrcaBarometerPlugin)
 
 } // namespace gazebo

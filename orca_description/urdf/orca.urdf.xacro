@@ -22,6 +22,8 @@
   <xacro:property name="MASS_Z" value="0.011"/>
   <xacro:property name="FORWARD_FORCE" value="110"/>
   <xacro:property name="REVERSE_FORCE" value="88"/>
+  <xacro:property name="HAS_TETHER" default="false"/>
+  <xacro:property name="SURFACE" default="10"/>
 
   <!-- Physics properties -->
   <xacro:property name="FLUID_DENSITY" value="1029"/>
@@ -152,13 +154,13 @@
   </xacro:t200>
 
   <!--
-    The BuoyancyPlugin (provided by Gazebo) applies a force that counteracts gravity. Notes:
-    1. there's no concept of a water surface, so positively buoyant objects float up forever
-    2. the force doesn't vary with water depth
+    The OrcaBuoyancyPlugin (provided by Orca) applies a force that counteracts gravity.
+    Buoyancy force is not applied if the link is above the surface of the water.
   -->
   <gazebo>
-    <plugin name="BuoyancyPlugin" filename="libBuoyancyPlugin.so">
+    <plugin name="OrcaBuoyancyPlugin" filename="libOrcaBuoyancyPlugin.so">
       <fluid_density>${FLUID_DENSITY}</fluid_density>
+      <surface>${SURFACE}</surface>
       <link name="base_link">
         <center_of_volume>0 0 0.06</center_of_volume>
         <volume>${TOTAL_MASS / FLUID_DENSITY}</volume>
@@ -167,14 +169,17 @@
   </gazebo>
 
   <!--
-  The DragPlugin (provided by Orca) applies a drag force proportional to velocity^2.
+  The OrcaDragPlugin (provided by Orca) applies a drag force proportional to velocity^2.
   -->
   <gazebo>
-    <plugin name="DragPlugin" filename="libDragPlugin.so">
+    <plugin name="OrcaDragPlugin" filename="libOrcaDragPlugin.so">
       <link name="base_link">
         <center_of_mass>0 0 ${MASS_Z}</center_of_mass>
         <tether_attach>-0.25 0 ${THRUSTER_Z}</tether_attach>
-        <surface>10</surface>
+        <xacro:unless value="${HAS_TETHER}">
+          <tether_drag>0</tether_drag>
+        </xacro:unless>
+        <surface>${SURFACE}</surface>
       </link>
     </plugin>
   </gazebo>
@@ -184,7 +189,7 @@
     The URDF to SDF translation nukes the joints, so we need to copy/paste the joint locations here.
   -->
   <gazebo>
-    <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so">
+    <plugin name="OrcaThrusterPlugin" filename="libOrcaThrusterPlugin.so">
       <ros_topic>/orca_base/control</ros_topic>
       <thruster name="front_right"> <!-- name attributes are ignored; the tag order must match the message array order -->
         <pos_force>${FORWARD_FORCE}</pos_force> <!-- units are N, positive for ccw, negative for cw -->
@@ -220,12 +225,12 @@
   </gazebo>
 
   <!--
-    The BarometerPlugin (provided by Orca, wraps a Gazebo altimeter sensor) simulates a barometer sensor such as the BlueRobotics Bar30.
+    The OrcaBarometerPlugin (provided by Orca, wraps a Gazebo altimeter sensor) simulates a barometer sensor such as the BlueRobotics Bar30.
   -->
   <gazebo reference="base_link">
     <sensor name="barometer_sensor" type="altimeter">
       <update_rate>10</update_rate> <!-- Match orca_driver rate -->
-      <plugin name="BarometerPlugin" filename="libBarometerPlugin.so">
+      <plugin name="OrcaBarometerPlugin" filename="libOrcaBarometerPlugin.so">
         <ros_topic>/barometer</ros_topic>
         <fluid_density>${FLUID_DENSITY}</fluid_density>
       </plugin>
@@ -257,9 +262,11 @@
     When it goes underwater, the GPS signal is lost.
   -->
   <gazebo>
-    <plugin name="SubmersibleGPSPlugin" filename="libSubmersibleGPSPlugin.so">
+    <plugin name="OrcaGPSPlugin" filename="libOrcaGPSPlugin.so">
       <link name="base_link">
         <ros_topic>/gps</ros_topic>
+        <mast_height>1</mast_height>
+        <surface>${SURFACE}</surface>
       </link>
     </plugin>
   </gazebo>
