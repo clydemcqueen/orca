@@ -8,45 +8,61 @@ constexpr const double XY_EPSILON = 0.3;          // Close enough for xy motion 
 constexpr const double YAW_VELO = M_PI / 5;       // Rotation velocity (r/s)
 constexpr const double YAW_EPSILON = M_PI / 16;   // Close enough for rotation (r)
 
+// Move an angle to the region [-M_PI, M_PI]
+double norm_angle(double a)
+{
+  while (a < -M_PI)
+  {
+    a += 2 * M_PI;
+  }
+  while (a > M_PI)
+  {
+    a -= 2 * M_PI;
+  }
+
+  return a;
+}
+
 void BaseMotion::init(const MotionState &curr, const MotionState &goal)
 {
   plan_ = curr;
   goal_ = goal;
-
-  // All motion models run at a constant depth TODO this will change
-  z_controller_.setTarget(goal.depth_);
 
   last_time_ = ros::Time::now();
 };
 
 bool BaseMotion::advance(const MotionState &curr, OrcaEfforts &efforts)
 {
-  // TODO
+  efforts.clear();
+
+  ros::Time now = ros::Time::now();
+  dt_ = (now - last_time_).toSec();
+  last_time_ = now;
 }
 
 void RotateMotion::init(const MotionState &curr, const MotionState &goal)
 {
   BaseMotion::init(curr, goal);
 
-  // Assume instant acceleration
-  plan_yaw_dot_ = YAW_VELO; // TODO pick the shortest direction
+  // Hold depth
+  z_controller_.setTarget(goal.depth_);
+
+  // Pick the shortest direction, assume instant acceleration
+  plan_yaw_dot_ = norm_angle(goal.yaw_ - curr.yaw_) > 0 ? YAW_VELO : -YAW_VELO;
 
   ROS_DEBUG("Rotate 1. curr angle %g, goal angle %g, plan_yaw_dot_ %g", curr.yaw_, goal.yaw_, plan_yaw_dot_);
 }
 
 bool RotateMotion::advance(const MotionState &curr, OrcaEfforts &efforts)
 {
-  efforts.clear();
+  BaseMotion::advance(curr, efforts);
 
-  if (std::abs(goal_.yaw_ - curr.yaw_) > YAW_EPSILON) // TODO discontinuity
+  if (std::abs(norm_angle(goal_.yaw_ - curr.yaw_)) > YAW_EPSILON)
   {
-    double dt = (ros::Time::now() - last_time_).toSec();
-    last_time_ = ros::Time::now();
-
-    if (std::abs(goal_.yaw_ - plan_.yaw_) > YAW_EPSILON) // TODO discontinuity
+    if (std::abs(norm_angle(goal_.yaw_ - plan_.yaw_)) > YAW_EPSILON)
     {
       // Update our plan
-      plan_.yaw_ += plan_yaw_dot_ * dt;
+      plan_.yaw_ = norm_angle(plan_.yaw_ + plan_yaw_dot_ * dt_);
 
       yaw_controller_.setTarget(plan_.yaw_);
 
@@ -54,9 +70,12 @@ bool RotateMotion::advance(const MotionState &curr, OrcaEfforts &efforts)
     }
 
     // Calc desired accelerations
-    efforts.yaw_ = yaw_controller_.calc(curr.yaw_, dt, 0);
+    efforts.yaw_ = yaw_controller_.calc(curr.yaw_, dt_, 0);
 
     ROS_DEBUG("Rotate 3. curr %g, effort %g", curr.yaw_, efforts.yaw_);
+
+    // Hold depth
+    efforts.vertical_ = z_controller_.calc(curr.depth_, dt_, 0);
 
     // Continue
     return true;
@@ -68,10 +87,15 @@ bool RotateMotion::advance(const MotionState &curr, OrcaEfforts &efforts)
   }
 }
 
-
 void LineMotion::init(const MotionState &curr, const MotionState &goal)
 {
   BaseMotion::init(curr, goal);
+
+  // Hold depth
+  z_controller_.setTarget(goal.depth_);
+
+  // Hold yaw
+  yaw_controller_.setTarget(goal.yaw_);
 
   double angle_to_goal = atan2(goal.y_ - curr.y_, goal.x_ - curr.x_);
 
@@ -85,18 +109,15 @@ void LineMotion::init(const MotionState &curr, const MotionState &goal)
 // Return true to continue, false if we're done
 bool LineMotion::advance(const MotionState &curr, OrcaEfforts &efforts)
 {
-  efforts.clear();
+  BaseMotion::advance(curr, efforts);
 
   if (std::hypot(goal_.x_ - curr.x_, goal_.y_ - curr.y_) > XY_EPSILON)
   {
-    double dt = (ros::Time::now() - last_time_).toSec();
-    last_time_ = ros::Time::now();
-
     if (std::hypot(goal_.x_ - plan_.x_, goal_.y_ - plan_.y_) > XY_EPSILON)
     {
       // Update our plan
-      plan_.x_ += plan_x_dot_ * dt;
-      plan_.y_ += plan_y_dot_ * dt;
+      plan_.x_ += plan_x_dot_ * dt_;
+      plan_.y_ += plan_y_dot_ * dt_;
 
       x_controller_.setTarget(plan_.x_);
       y_controller_.setTarget(plan_.y_);
@@ -105,8 +126,8 @@ bool LineMotion::advance(const MotionState &curr, OrcaEfforts &efforts)
     }
 
     // Calc desired accelerations
-    double x_dot_dot = x_controller_.calc(curr.x_, dt, 0);
-    double y_dot_dot = y_controller_.calc(curr.y_, dt, 0);
+    double x_dot_dot = x_controller_.calc(curr.x_, dt_, 0);
+    double y_dot_dot = y_controller_.calc(curr.y_, dt_, 0);
 
     // Rotate frame, and assign to efforts
     efforts.forward_ = x_dot_dot * cos(curr.yaw_) + y_dot_dot * sin(curr.yaw_);
@@ -115,11 +136,11 @@ bool LineMotion::advance(const MotionState &curr, OrcaEfforts &efforts)
     ROS_DEBUG("Line 3. curr_x %g, curr_y %g, yaw %g, x_dot_dot %g, y_dot_dot %g, forward %g, strafe %g", curr.x_, curr.y_,
       curr.yaw_, x_dot_dot, y_dot_dot, efforts.forward_, efforts.strafe_);
 
-    // Hold depth just below the surface
-    efforts.vertical_ = z_controller_.calc(curr.depth_, dt, 0);
+    // Hold depth
+    efforts.vertical_ = z_controller_.calc(curr.depth_, dt_, 0);
 
     // Hold yaw
-    // TODO
+    efforts.yaw_ = yaw_controller_.calc(curr.yaw_, dt_, 0);
 
     // Continue
     return true;

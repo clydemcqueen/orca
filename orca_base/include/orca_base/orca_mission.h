@@ -15,15 +15,16 @@ class BaseMotion
 {
 protected:
 
-  MotionState goal_;
-  MotionState plan_;
+  MotionState goal_;      // Goal state
+  MotionState plan_;      // Our evolving plan to get to the goal
+
+  ros::Time last_time_;   // Time of last call to advance
+  double dt_;             // Elapsed time since the last call to advance (s)
 
   pid::Controller x_controller_{false, 0.03, 0, 0.01};
   pid::Controller y_controller_{false, 0.03, 0, 0.01};
   pid::Controller z_controller_{false, 0.05, 0, 0.05};
-  pid::Controller yaw_controller_{true, 0.06, 0, 0.02}; // TODO still too small relative to target velocity
-
-  ros::Time last_time_;
+  pid::Controller yaw_controller_{true, 0.09, 0, 0.03};
 
 public:
 
@@ -34,8 +35,7 @@ public:
   virtual bool advance(const MotionState &curr, OrcaEfforts &efforts);
 };
 
-// Rotate about a point. Consider only yaw and depth. This will allow us to rotate about a point in the water column.
-// There is a risk that the vehicle will wander a little in x and y.
+// Rotate about a point.
 class RotateMotion : BaseMotion
 {
 private:
