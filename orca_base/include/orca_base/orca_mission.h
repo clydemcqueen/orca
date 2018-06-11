@@ -8,7 +8,7 @@
 
 namespace orca_base {
 
-constexpr const double SURFACE_DEPTH = 0.5; // Good depth for running along the surface
+constexpr const double UNDER_SURFACE = 0.5; // Good depth for running along the surface
 
 // Abstract base class for motion prediction
 class BaseMotion
@@ -16,7 +16,59 @@ class BaseMotion
 protected:
 
   MotionState goal_;      // Goal state
-  MotionState plan_;      // Our evolving plan to get to the goal
+
+public:
+
+  // Initialize the motion prediction
+  virtual void init(const MotionState &start, const MotionState &goal, MotionState &plan);
+
+  // Advance the motion prediction; return true to continue, false if we're done
+  virtual bool advance(double dt, MotionState &plan) = 0;
+};
+
+// Rotate about a point.
+class RotateMotion : public BaseMotion
+{
+public:
+
+  void init(const MotionState &start, const MotionState &goal, MotionState &plan) override;
+  bool advance(double dt, MotionState &plan) override;
+};
+
+// Move in a straight line from one pose to another.
+class LineMotion : public BaseMotion
+{
+public:
+
+  void init(const MotionState &start, const MotionState &goal, MotionState &plan) override;
+  bool advance(double dt, MotionState &plan) override;
+};
+
+// TODO circle -- need radius in goal
+// TODO box -- need x, y box size in goal
+// TODO submerge and surface
+
+class SurfaceMission
+{
+private:
+
+  enum class Phase
+  {
+    no_goal,    // There's no goal
+    turn,       // We're turning toward our goal
+    run,        // We're moving toward the goal
+    final_turn  // We're turning toward the target heading
+  };
+
+  Phase phase_ = Phase::no_goal;
+
+  MotionState goal1_;
+  MotionState goal2_;
+  MotionState goal3_;
+
+  std::unique_ptr<BaseMotion> predictor_;
+
+  MotionState plan_;
 
   ros::Time last_time_;   // Time of last call to advance
   double dt_;             // Elapsed time since the last call to advance (s)
@@ -28,91 +80,9 @@ protected:
 
 public:
 
-  // Initialize the motion prediction
-  virtual void init(const MotionState &curr, const MotionState &goal);
-
-  // Advance the motion prediction; return true to continue, false if we're done
-  virtual bool advance(const MotionState &curr, OrcaEfforts &efforts);
+  void init(const MotionState &start, const MotionState &goal);
+  bool advance(const MotionState &curr, OrcaEfforts &efforts);
 };
-
-// Rotate about a point.
-class RotateMotion : BaseMotion
-{
-private:
-
-  double plan_yaw_dot_;
-
-public:
-
-  void init(const MotionState &curr, const MotionState &goal) override;
-  bool advance(const MotionState &curr, OrcaEfforts &efforts) override;
-};
-
-// Move in a straight line from one pose to another.
-class LineMotion : BaseMotion
-{
-private:
-
-  double plan_x_dot_;
-  double plan_y_dot_;
-
-public:
-
-  void init(const MotionState &curr, const MotionState &goal) override;
-  bool advance(const MotionState &curr, OrcaEfforts &efforts) override;
-};
-
-// TODO composite, with rotate + line + rotate -- different goal state
-// TODO circle -- need radius in goal state
-// TODO composite grid -- need x, y grid size in goal state
-// TODO submerge and surface
-
-#if 0
-class SurfaceMission
-{
-private:
-
-  enum class Phase:int;
-  static std::map<Phase, std::string> phase_names_;
-
-  ros::NodeHandle &nh_priv_;
-  Phase phase_;
-  ros::Subscriber gps_sub_;
-  ros::Time last_time_;
-  pid::Controller x_controller_{false, 0.03, 0, 0.01};
-  pid::Controller y_controller_{false, 0.03, 0, 0.01};
-  pid::Controller z_controller_{false, 0.05, 0, 0.05};
-
-  // Goal state
-  double goal_x_ = 0;
-  double goal_y_ = 0;
-  double goal_yaw_ = 0;
-
-  // Planned state
-  double plan_x_ = 0;
-  double plan_y_ = 0;
-  double plan_x_dot_ = 0;
-  double plan_y_dot_ = 0;
-
-  // Current state
-  double curr_x_ = 0;
-  double curr_y_ = 0;
-
-  void changePhase(Phase new_phase);
-
-  void gpsCallback(const geometry_msgs::Vector3Stamped::ConstPtr& gps_msg);
-
-public:
-
-  SurfaceMission(ros::NodeHandle &nh_priv);
-
-  // Initialize a mission
-  void init(double goal_x, double goal_y, double goal_yaw);
-
-  // Calc thruster efforts; return true if we're still running the mission, false if the mission is complete
-  bool advance(double yaw, double depth, double &forward_effort, double &strafe_effort, double &vertical_effort, double &yaw_effort);
-};
-#endif
 
 } // namespace orca_base
 

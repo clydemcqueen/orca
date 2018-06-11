@@ -155,7 +155,7 @@ void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 
     ROS_INFO("Start mission, goal is (%g, %g), heading %g", msg->pose.position.x, msg->pose.position.y, yaw);
 
-    motion_.init(MotionState(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_), MotionState(msg->pose.position.x, msg->pose.position.y, SURFACE_DEPTH, yaw));
+    mission_.init(MotionState(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_), MotionState(msg->pose.position.x, msg->pose.position.y, UNDER_SURFACE, yaw));
     setMode(orca_msgs::Control::mission);
   }
   else
@@ -565,7 +565,7 @@ void OrcaBase::spinOnce()
   // Run a mission
   if (mode_ == orca_msgs::Control::mission)
   {
-    if (motion_.advance(MotionState(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_), efforts_))
+    if (mission_.advance(MotionState(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_), efforts_))
     {
       // TODO deadband?
       efforts_.forward_ = clamp(efforts_.forward_ * stability_, -1.0, 1.0);

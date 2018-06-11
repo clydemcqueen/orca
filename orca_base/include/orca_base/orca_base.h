@@ -63,7 +63,7 @@ private:
   ros::Time ping_time_;               // Last time we heard from the topside
   ros::Time prev_loop_time_;          // Last time spinOnce was called
   uint8_t mode_;                      // Operating mode
-  RotateMotion motion_;               // TODO should have a ref to the base class, then we can alloc
+  SurfaceMission mission_;                   // TODO should have a ref to the base class, then we can alloc
 
   // Barometer
   bool barometer_ready_;              // True if we're receiving barometer messages
