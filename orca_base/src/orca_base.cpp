@@ -3,6 +3,7 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 #include "orca_base/orca_base.h"
 #include "orca_base/orca_pwm.h"
 
@@ -111,8 +112,10 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
 
   // Advertise all topics that we'll publish on
   control_pub_ = nh_priv_.advertise<orca_msgs::Control>("control", 1);
-  marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("rviz_marker_array", 1);
   odom_pub_ = nh_priv_.advertise<nav_msgs::Odometry>("/odom", 1);
+  thrust_marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("thrust_markers", 1);
+  mission_plan_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_plan", 1);
+  mission_actual_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_actual", 1);
 }
 
 // New barometer reading
@@ -150,13 +153,28 @@ void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     // Pull out yaw (kinda cumbersome)
     tf2::Quaternion goal_orientation;
     tf2::fromMsg(msg->pose.orientation, goal_orientation);
-    double roll, pitch, yaw;
-    tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, yaw);
+    double roll, pitch, goal_yaw;
+    tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, goal_yaw);
 
-    ROS_INFO("Start mission, goal is (%g, %g), heading %g", msg->pose.position.x, msg->pose.position.y, yaw);
+    OrcaPose curr_pose(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_);
+    OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, depth_state_, goal_yaw);
 
-    mission_.init(MotionState(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_), MotionState(msg->pose.position.x, msg->pose.position.y, UNDER_SURFACE, yaw));
-    setMode(orca_msgs::Control::mission);
+    ROS_INFO("Start mission, goal is (%g, %g), heading %g", goal_pose.x_, goal_pose.y_, goal_pose.yaw_);
+
+    mission_.reset(new SquareMission());
+    nav_msgs::Path mission_plan_path;
+    if (mission_->init(curr_pose, goal_pose, mission_plan_path))
+    {
+      mission_plan_pub_.publish(mission_plan_path);
+      mission_actual_path_.header.stamp = ros::Time::now();
+      mission_actual_path_.header.frame_id = "map";
+      mission_actual_path_.poses.clear();
+      setMode(orca_msgs::Control::mission);
+    }
+    else
+    {
+      ROS_ERROR("Can't initialize mission; internal error");
+    }
   }
   else
   {
@@ -325,7 +343,7 @@ void OrcaBase::publishControl()
     marker.color.b = 0.0;
     markers_msg.markers.push_back(marker);
   }
-  marker_pub_.publish(markers_msg);
+  thrust_marker_pub_.publish(markers_msg);
 }
 
 // Change operation mode
@@ -565,7 +583,11 @@ void OrcaBase::spinOnce()
   // Run a mission
   if (mode_ == orca_msgs::Control::mission)
   {
-    if (mission_.advance(MotionState(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_), efforts_))
+    OrcaPose current_pose(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_);
+    BaseMission::addToPath(mission_actual_path_, current_pose);
+    mission_actual_pub_.publish(mission_actual_path_);
+
+    if (mission_->advance(current_pose, efforts_))
     {
       // TODO deadband?
       efforts_.forward_ = clamp(efforts_.forward_ * stability_, -1.0, 1.0);

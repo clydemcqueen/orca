@@ -63,7 +63,10 @@ private:
   ros::Time ping_time_;               // Last time we heard from the topside
   ros::Time prev_loop_time_;          // Last time spinOnce was called
   uint8_t mode_;                      // Operating mode
-  SurfaceMission mission_;                   // TODO should have a ref to the base class, then we can alloc
+
+  // Current mission
+  std::unique_ptr<BaseMission> mission_;
+  nav_msgs::Path mission_actual_path_;
 
   // Barometer
   bool barometer_ready_;              // True if we're receiving barometer messages
@@ -129,11 +132,13 @@ private:
   void pingCallback(const std_msgs::Empty::ConstPtr &msg);
   
   // Publications
-  ros::Publisher control_pub_;
-  ros::Publisher marker_pub_;
-  ros::Publisher odom_pub_;
-  tf2_ros::TransformBroadcaster tf_broadcaster_;
-  
+  ros::Publisher control_pub_;                    // Thruster control messages
+  ros::Publisher odom_pub_;                       // Odometry messages
+  tf2_ros::TransformBroadcaster tf_broadcaster_;  // TF messages
+  ros::Publisher thrust_marker_pub_;              // Visualize thrust in rviz
+  ros::Publisher mission_plan_pub_;               // Visualize planned path in rviz
+  ros::Publisher mission_actual_pub_;             // Visualize actual path in rviz
+
   // Helpers
   void publishControl();
   void publishOdom();

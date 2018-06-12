@@ -20,7 +20,7 @@ public:
   // Standard constructor
   Controller(bool angle, double Kp, double Ki, double Kd)
   {
-    angle = angle_;
+    angle_ = angle;
     Kp_ = Kp;
     Ki_ = Ki;
     Kd_ = Kd;
@@ -46,7 +46,6 @@ public:
   // Run one calculation
   double calc(double state, double dt, double bias)
   {
-
     double error = target_ - state;
 
     if (angle_)
