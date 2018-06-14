@@ -58,7 +58,7 @@ constexpr double ROV_LINEAR_DRAG_Y = 0.5 * FLUID_DENSITY * ROV_AREA_Y * ROV_DRAG
 constexpr double ROV_LINEAR_DRAG_Z = 0.5 * FLUID_DENSITY * ROV_AREA_Z * ROV_DRAG_COEFFICIENT_Z;
 constexpr double ANGULAR_DRAG_X = ROV_LINEAR_DRAG_X / 2; // A hack
 constexpr double ANGULAR_DRAG_Y = ROV_LINEAR_DRAG_Y / 2;
-constexpr double ANGULAR_DRAG_Z = ROV_LINEAR_DRAG_Z / 2;
+constexpr double ANGULAR_DRAG_Z = ROV_LINEAR_DRAG_Z / 2; // TODO these are wrong, see revised cals in orca_mission.cpp
 constexpr double TETHER_DIAM = 0.008;
 constexpr double TETHER_DRAG_COEFFICIENT = 1.1;
 constexpr double TETHER_DRAG = 0.5 * FLUID_DENSITY * TETHER_DIAM * TETHER_DRAG_COEFFICIENT;
@@ -69,13 +69,13 @@ private:
 
   physics::LinkPtr base_link_;
 
-  // Drag force will be applied to the center_of_mass_
+  // Drag force will be applied to the center_of_mass_ (body frame)
   math::Vector3 center_of_mass_ {0, 0, 0};
 
-  // Tether drag will be applied to the tether attachment point
+  // Tether drag will be applied to the tether attachment point (body frame)
   math::Vector3 tether_attach_ {0, 0, 0};
 
-  // Drag constants
+  // Drag constants (body frame)
   math::Vector3 linear_drag_ {ROV_LINEAR_DRAG_X, ROV_LINEAR_DRAG_Y, ROV_LINEAR_DRAG_Z};
   math::Vector3 angular_drag_ {ANGULAR_DRAG_X, ANGULAR_DRAG_Y, ANGULAR_DRAG_Z};
   double tether_drag_ {TETHER_DRAG};

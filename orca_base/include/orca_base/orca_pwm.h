@@ -1,31 +1,10 @@
-#ifndef ORCA_UTIL_H
-#define ORCA_UTIL_H
+#ifndef ORCA_PWM_H
+#define ORCA_PWM_H
 
 #include <cstdint>
+#include "orca_base/util.h"
 
 namespace orca_base {
-
-//---------------------------------
-// Helpers
-//---------------------------------
-
-template<typename T>
-constexpr const T clamp(const T v, const T min, const T max)
-{
-  return v > max ? max : (v < min ? min : v);
-}
-
-template<typename T>
-constexpr const T dead_band(const T v, const T d)
-{
-  return v < d && v > -d ? 0 : v;
-}
-
-template<typename A, typename B>
-constexpr const B scale(const A a, const A a_min, const A a_max, const B b_min, const B b_max)
-{
-  return clamp(static_cast<B>(b_min + static_cast<double>(b_max - b_min) / (a_max - a_min) * (a - a_min)), b_min, b_max);
-}
 
 //---------------------------------
 // Camera tilt servo
@@ -99,4 +78,4 @@ constexpr const double pwm_to_effort(const uint16_t pwm)
 
 } // namespace orca_base
 
-#endif // ORCA_UTIL_H
+#endif // ORCA_PWM_H

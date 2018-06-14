@@ -20,7 +20,7 @@ namespace gazebo
  *        <ros_topic>/control</ros_topic>
  *        <thruster>
  *          <pos_force>50</pos_force>
- *          <neg_force>50</neg_force>
+ *          <neg_force>40</neg_force>
  *          <origin xyz="0.1 0.15 0" rpy="0 ${PI/2} ${PI*3/4}"/>
  *        </thruster>
  *      </plugin>
@@ -33,8 +33,8 @@ namespace gazebo
  * ranges from 1100 (full reverse) through 1500 (stop) to 1900 (full forward).
  *
  *    <ros_topic> topic for Control messages. Default is /control.
- *    <pos_force> force (N) with max positive effort (pwm=1900). Default 110. Use negative if prop is reversed.
- *    <neg_force> force (N) with max negative effort (pwm=1100). Default is 88. Use negative if prop is reversed.
+ *    <pos_force> force (N) with max positive effort (pwm=1900). Default 50. Use negative if prop is reversed.
+ *    <neg_force> force (N) with max negative effort (pwm=1100). Default is 40. Use negative if prop is reversed.
  *    <origin> thruster pose relative to base_link. Default is 0, 0, 0, 0, 0, 0.
  *
  * Note: the ROS URDF to SDF translation drops all fixed joints, collapsing all links into a single link.
@@ -44,8 +44,8 @@ namespace gazebo
  * 3. Use the <dontcollapsejoints> tag. (appears to require SDF 2.0)
  */
 
-constexpr double T200_MAX_POS_FORCE = 110;
-constexpr double T200_MAX_NEG_FORCE = 88;
+constexpr double T200_MAX_POS_FORCE = 50;
+constexpr double T200_MAX_NEG_FORCE = 40;
 
 class OrcaThrusterPlugin : public ModelPlugin
 {

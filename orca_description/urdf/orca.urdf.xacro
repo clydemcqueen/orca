@@ -10,6 +10,9 @@
   <xacro:property name="LENGTH" value="0.457"/>
   <xacro:property name="WIDTH" value="0.338"/>
   <xacro:property name="HEIGHT" value="0.254"/>
+  <xacro:property name="IXX" value="${TOTAL_MASS / 12 * (WIDTH * WIDTH + HEIGHT * HEIGHT)}"/>
+  <xacro:property name="IYY" value="${TOTAL_MASS / 12 * (LENGTH * LENGTH + HEIGHT * HEIGHT)}"/>
+  <xacro:property name="IZZ" value="${TOTAL_MASS / 12 * (LENGTH * LENGTH + WIDTH * WIDTH)}"/>
   <xacro:property name="FLOAT_X" value="0.12"/>
   <xacro:property name="FLOAT_Y" value="0.11"/>
   <xacro:property name="FLOAT_Z" value="0.07"/>
@@ -20,8 +23,8 @@
   <xacro:property name="VERT_THRUSTER_Z" value="0.09"/>
   <xacro:property name="BUOYANCY" value="0.09"/>
   <xacro:property name="MASS_Z" value="0.011"/>
-  <xacro:property name="FORWARD_FORCE" value="110"/>
-  <xacro:property name="REVERSE_FORCE" value="88"/>
+  <xacro:property name="FORWARD_FORCE" value="50"/>
+  <xacro:property name="REVERSE_FORCE" value="40"/>
   <xacro:property name="HAS_TETHER" default="false"/>
   <xacro:property name="SURFACE" default="10"/>
 
@@ -91,7 +94,7 @@
     <inertial>
       <origin xyz="0 0 ${MASS_Z}"/> <!-- Center of mass -->
       <mass value="${TOTAL_MASS - BUOYANCY}"/>
-      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+      <inertia ixx="${IXX}" ixy="0.0" ixz="0.0" iyy="${IYY}" iyz="0.0" izz="${IZZ}"/>
     </inertial>
     <visual>
       <origin xyz="${FLOAT_X} ${FLOAT_Y} ${FLOAT_Z}"/>

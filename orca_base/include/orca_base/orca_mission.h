@@ -1,67 +1,10 @@
 #ifndef ORCA_MISSION_H
 #define ORCA_MISSION_H
 
-#include <ros/ros.h>
-#include <geometry_msgs/Vector3Stamped.h>
 #include <nav_msgs/Path.h>
-#include "orca_base/orca_model.h"
-#include "orca_base/pid.h"
+#include "orca_base/orca_motion.h"
 
 namespace orca_base {
-
-constexpr const double UNDER_SURFACE = 0.5; // Good depth for running along the surface
-
-//=====================================================================================
-// Abstract base class for motion planning
-//=====================================================================================
-
-class BaseMotion
-{
-protected:
-
-  OrcaPose goal_;      // Goal pose
-
-public:
-
-  // Initialize the motion plan, return true if successful
-  virtual bool init(const OrcaPose &start, const OrcaPose &goal);
-
-  // Advance the motion plan, return true to continue, false if we're done
-  virtual bool advance(double dt, OrcaPose &plan) = 0;
-};
-
-//=====================================================================================
-// Plan motion about a point
-//=====================================================================================
-
-class RotateMotion: public BaseMotion
-{
-private:
-
-  double yaw_dot_;
-
-public:
-
-  bool init(const OrcaPose &start, const OrcaPose &goal) override;
-  bool advance(double dt, OrcaPose &plan) override;
-};
-
-//=====================================================================================
-// Plan motion from point A to point B
-//=====================================================================================
-
-class LineMotion: public BaseMotion
-{
-private:
-
-  double x_dot_;
-  double y_dot_;
-
-public:
-
-  bool init(const OrcaPose &start, const OrcaPose &goal) override;
-  bool advance(double dt, OrcaPose &plan) override;
-};
 
 //=====================================================================================
 // Abstract base class for running missions
@@ -76,11 +19,6 @@ protected:
 
   ros::Time last_time_;   // Time of last call to advance
   double dt_;             // Elapsed time since the last call to advance (s)
-
-  pid::Controller x_controller_{false, 0.03, 0, 0.01};
-  pid::Controller y_controller_{false, 0.03, 0, 0.01};
-  pid::Controller z_controller_{false, 0.05, 0, 0.05};
-  pid::Controller yaw_controller_{true, 0.09, 0, 0.03};
 
 public:
 
@@ -133,7 +71,7 @@ class SquareMission: public BaseMission
 {
 private:
 
-  constexpr const static int NO_GOAL = -1;
+  constexpr static int NO_GOAL = -1;
   int phase_ = NO_GOAL;
   std::vector<OrcaPose>goals_;
 
