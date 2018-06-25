@@ -66,6 +66,8 @@ private:
 
   // Current mission
   std::unique_ptr<BaseMission> mission_;
+  OrcaPose plan_;
+  nav_msgs::Path mission_plan_path_;
   nav_msgs::Path mission_actual_path_;
 
   // Barometer

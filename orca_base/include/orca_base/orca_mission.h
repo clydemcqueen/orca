@@ -7,7 +7,7 @@
 namespace orca_base {
 
 //=====================================================================================
-// Abstract base class for running missions
+// BaseMission is an abstract base class for running missions
 //=====================================================================================
 
 class BaseMission
@@ -15,15 +15,15 @@ class BaseMission
 protected:
 
   std::unique_ptr<BaseMotion> planner_;
-  OrcaPose plan_;
+  //OrcaPose pose_;
 
   ros::Time last_time_;   // Time of last call to advance
   double dt_;             // Elapsed time since the last call to advance (s)
 
 public:
 
-  virtual bool init(const OrcaPose &start, const OrcaPose &goal, nav_msgs::Path &path);
-  virtual bool advance(const OrcaPose &curr, OrcaEfforts &efforts);
+  virtual bool init(const OrcaPose &start, const OrcaPose &goal) = 0;
+  virtual bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts);
 
   static void addToPath(nav_msgs::Path &path, const OrcaPose &pose);
   static void addToPath(nav_msgs::Path &path, const std::vector<OrcaPose> &poses);
@@ -32,7 +32,7 @@ public:
 //=====================================================================================
 // SurfaceMission
 //
-// Run from point A to B at the surface
+// Run from pose A to B
 // Orient the vehicle in the direction of motion to avoid obstacles
 //=====================================================================================
 
@@ -56,14 +56,14 @@ private:
 
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal, nav_msgs::Path &path) override;
-  bool advance(const OrcaPose &curr, OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &start, const OrcaPose &goal /*, nav_msgs::Path &path*/) override;
+  bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts) override;
 };
 
 //=====================================================================================
 // SquareMission
 //
-// Run in a square defined by 2 points
+// Run in a square defined by 2 poses
 // Orient the vehicle in the direction of motion to avoid obstacles
 //=====================================================================================
 
@@ -77,8 +77,37 @@ private:
 
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal, nav_msgs::Path &path) override;
-  bool advance(const OrcaPose &curr, OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &start, const OrcaPose &goal /*, nav_msgs::Path &path*/) override;
+  bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts) override;
+};
+
+//=====================================================================================
+// ArcMission
+//
+// Run in an arc defined by 2 poses
+// Orient the vehicle in the direction of motion to avoid obstacles
+//=====================================================================================
+
+class ArcMission: public BaseMission
+{
+public:
+
+  bool init(const OrcaPose &start, const OrcaPose &goal) override;
+  bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts) override;
+};
+
+//=====================================================================================
+// VerticalMission
+//
+// Descend or ascend
+//=====================================================================================
+
+class VerticalMission: public BaseMission
+{
+public:
+
+  bool init(const OrcaPose &start, const OrcaPose &goal) override;
+  bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts) override;
 };
 
 } // namespace orca_base

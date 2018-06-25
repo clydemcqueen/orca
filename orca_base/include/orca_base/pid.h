@@ -33,6 +33,8 @@ public:
     Kp_ = natural_frequency * natural_frequency * (1 + 2 * damping_ratio);
     Ki_ = natural_frequency * natural_frequency * natural_frequency;
     Kd_ = natural_frequency * (1 + 2 * damping_ratio);
+
+    ROS_INFO("pid (%g, %g) => (%g, %g, %g) %s", damping_ratio, natural_frequency, Kp_, Ki_, Kd_, angle ? "(angle)" : "");
   }
 
   // Set target

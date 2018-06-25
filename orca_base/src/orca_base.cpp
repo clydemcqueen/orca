@@ -156,19 +156,25 @@ void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     double roll, pitch, goal_yaw;
     tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, goal_yaw);
 
-    OrcaPose curr_pose(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_);
-    OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, depth_state_, goal_yaw);
+    OrcaPose curr_pose(gps_position_.x(), gps_position_.y(), -depth_state_, yaw_state_);
+    OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, -depth_state_, goal_yaw);
 
-    ROS_INFO("Start mission, goal is (%g, %g), heading %g", goal_pose.x_, goal_pose.y_, goal_pose.yaw_);
+    ROS_INFO("Start mission at (%g, %g), goal is (%g, %g), heading %g", curr_pose.x, curr_pose.y, goal_pose.x, goal_pose.y, goal_pose.yaw);
 
     mission_.reset(new SquareMission());
-    nav_msgs::Path mission_plan_path;
-    if (mission_->init(curr_pose, goal_pose, mission_plan_path))
+    if (mission_->init(curr_pose, goal_pose))
     {
-      mission_plan_pub_.publish(mission_plan_path);
+      mission_plan_path_.header.stamp = ros::Time::now();
+      mission_plan_path_.header.frame_id = "map";
+      mission_plan_path_.poses.clear();
+
       mission_actual_path_.header.stamp = ros::Time::now();
       mission_actual_path_.header.frame_id = "map";
       mission_actual_path_.poses.clear();
+
+      // Init plan
+      plan_ = curr_pose;
+
       setMode(orca_msgs::Control::mission);
     }
     else
@@ -292,11 +298,11 @@ void OrcaBase::publishControl()
   for (int i = 0; i < THRUSTERS.size(); ++i)
   {
     // Clamp forward + strafe to xy_gain_
-    double xy_effort = clamp(efforts_.forward_ * THRUSTERS[i].forward_factor + efforts_.strafe_ * THRUSTERS[i].strafe_factor,
+    double xy_effort = clamp(efforts_.forward * THRUSTERS[i].forward_factor + efforts_.strafe * THRUSTERS[i].strafe_factor,
       -xy_gain_, xy_gain_);
 
     // Clamp total thrust
-    thruster_efforts.push_back(clamp(xy_effort + efforts_.yaw_ * THRUSTERS[i].yaw_factor + efforts_.vertical_ * THRUSTERS[i].vertical_factor,
+    thruster_efforts.push_back(clamp(xy_effort + efforts_.yaw * THRUSTERS[i].yaw_factor + efforts_.vertical * THRUSTERS[i].vertical_factor,
       THRUST_FULL_REV, THRUST_FULL_FWD));
   }
 
@@ -531,15 +537,15 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   // Thrusters
   if (rovOperation())
   {
-    efforts_.forward_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
+    efforts_.forward = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
     if (!holdingHeading())
     {
-      efforts_.yaw_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
+      efforts_.yaw = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
     }
-    efforts_.strafe_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
+    efforts_.strafe = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
     if (!holdingDepth())
     {
-      efforts_.vertical_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
+      efforts_.vertical = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
     }
   }
 }
@@ -570,30 +576,33 @@ void OrcaBase::spinOnce()
   if (holdingHeading())
   {
     double effort = yaw_controller_.calc(yaw_state_, dt, 0);
-    efforts_.yaw_ = dead_band(effort * stability_, yaw_pid_dead_band_);
+    efforts_.yaw = dead_band(effort * stability_, yaw_pid_dead_band_);
   }
 
   // Compute depth effort
   if (holdingDepth())
   {
     double effort = depth_controller_.calc(depth_state_, dt, 0);
-    efforts_.vertical_ = dead_band(-effort * stability_, depth_pid_dead_band_);
+    efforts_.vertical = dead_band(-effort * stability_, depth_pid_dead_band_);
   }
 
   // Run a mission
   if (mode_ == orca_msgs::Control::mission)
   {
-    OrcaPose current_pose(gps_position_.x(), gps_position_.y(), depth_state_, yaw_state_);
+    OrcaPose current_pose(gps_position_.x(), gps_position_.y(), -depth_state_, yaw_state_); // TODO OrcaBase.curr_
     BaseMission::addToPath(mission_actual_path_, current_pose);
     mission_actual_pub_.publish(mission_actual_path_);
 
-    if (mission_->advance(current_pose, efforts_))
+    if (mission_->advance(current_pose, plan_, efforts_))
     {
+      BaseMission::addToPath(mission_plan_path_, plan_);
+      mission_plan_pub_.publish(mission_plan_path_);
+
       // TODO deadband?
-      efforts_.forward_ = clamp(efforts_.forward_ * stability_, -1.0, 1.0);
-      efforts_.strafe_ = clamp(efforts_.strafe_ * stability_, -1.0, 1.0);
-      efforts_.vertical_ = clamp(-efforts_.vertical_ * stability_, -1.0, 1.0);
-      efforts_.yaw_ = clamp(efforts_.yaw_ * stability_, -1.0, 1.0);
+      efforts_.forward = clamp(efforts_.forward * stability_, -1.0, 1.0);
+      efforts_.strafe = clamp(efforts_.strafe * stability_, -1.0, 1.0);
+      efforts_.vertical = clamp(-efforts_.vertical * stability_, -1.0, 1.0);
+      efforts_.yaw = clamp(efforts_.yaw * stability_, -1.0, 1.0);
     }
     else
     {
