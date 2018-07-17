@@ -3,9 +3,11 @@
 #include <gazebo/physics/physics.hh>
 
 #include <ros/ros.h>
-#include <geometry_msgs/Vector3Stamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_broadcaster.h>
+
+#include "orca_gazebo/orca_gazebo_util.h"
 
 /* Simulate a GPS sensor attached to a mast on a submersible vehicle. Generates geometry_msgs/Vector3Stamped messages.
  * Usage:
@@ -13,19 +15,25 @@
  *    <gazebo>
  *      <plugin name="OrcaGPSPlugin" filename="libOrcaGPSPlugin.so">
  *        <link name="base_link">
- *          <ros_topic>/gps</ros_topic>
+ *          <pose_topic>/gps</pose_topic>
  *          <mast_height>0.5</mast_height>
  *          <surface>10</surface>
  *        </link>
  *      </plugin>
  *    </gazebo>
  *
- *    <ros_topic> Topic for geometry_msgs/Vector3Stamped messages. Default is /gps.
+ *    <pose_topic> Topic for geometry_msgs/PoseWithCovarianceStamped messages. Default is /gps.
  *    <mast_height> Height of the mast above the water. Default is 0.5.
  *    <surface> How far above z=0 the surface of the water is; used to calculate depth.
  */
 
 namespace gazebo {
+
+// https://www.gps.gov/systems/gps/performance/accuracy/
+constexpr double GPS_STDDEV = 1.891 / 2;
+
+// Must match URDF setting
+constexpr double SURFACE = 10;
 
 class OrcaGPSPlugin : public ModelPlugin
 {
@@ -61,13 +69,13 @@ public:
     nh_.reset(new ros::NodeHandle("gps_plugin"));
 
     std::string link_name = "base_link";
-    std::string ros_topic = "/gps";
+    std::string pose_topic = "/gps";
 
     std::cout << std::endl;
     std::cout << "ORCA GPS PLUGIN PARAMETERS" << std::endl;
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << "Default link name: " << link_name << std::endl;
-    std::cout << "Default ROS topic: " << ros_topic << std::endl;
+    std::cout << "Default pose topic: " << pose_topic << std::endl;
     std::cout << "Default mast height: " << mast_height_ << std::endl;
     std::cout << "Default surface: " << surface_ << std::endl;
 
@@ -81,10 +89,10 @@ public:
         std::cout << "Link name: " << link_name << std::endl;
       }
 
-      if (linkElem->HasElement("ros_topic")) // TODO should be child of gazebo element, not link element
+      if (linkElem->HasElement("pose_topic")) // TODO should be child of gazebo element, not link element
       {
-        ros_topic = linkElem->GetElement("ros_topic")->Get<std::string>();
-        std::cout << "ROS topic: " << ros_topic << std::endl;
+        pose_topic = linkElem->GetElement("pose_topic")->Get<std::string>();
+        std::cout << "Pose topic: " << pose_topic << std::endl;
       }
 
       if (linkElem->HasElement("mast_height"))
@@ -104,14 +112,14 @@ public:
     GZ_ASSERT(base_link_ != nullptr, "Missing link");
 
     // Set up ROS publisher
-    gps_pub_ = nh_->advertise<geometry_msgs::Vector3Stamped>(ros_topic, 1);
+    gps_pub_ = nh_->advertise<geometry_msgs::PoseWithCovarianceStamped>(pose_topic, 1);
 
-    // Create 10Hz timer
-    timer_ = nh_->createTimer(ros::Duration(0.1), &OrcaGPSPlugin::TimerCallback, this);
+    // Create timer
+    timer_ = nh_->createTimer(ros::Duration(1.0), &OrcaGPSPlugin::TimerCallback, this);
 
     // Initialize transform
-    gps_tf_.header.frame_id = "map";
-    gps_tf_.child_frame_id = "odom";
+    gps_tf_.header.frame_id = "odom";
+    gps_tf_.child_frame_id = "base_link";
     gps_tf_.transform.translation.x = 0;
     gps_tf_.transform.translation.y = 0;
     gps_tf_.transform.translation.z = 0;
@@ -131,17 +139,18 @@ public:
     gazebo::math::Vector3 pos = base_link_->GetWorldPose().pos;
     if (pos.z + mast_height_ > surface_)
     {
-      // Do we have a satellite fix?
+      // Do we have a satellite fix? Assume it takes 5 seconds
       if (time_above_surface_ > 5)
       {
-        // TODO add noise
-
-        // Publish gps message
-        geometry_msgs::Vector3Stamped msg;
+        // Publish pose
+        geometry_msgs::PoseWithCovarianceStamped msg;
+        msg.header.frame_id = "odom";
         msg.header.stamp = event.current_real;
-        msg.vector.x = pos.x;
-        msg.vector.y = pos.y;
-        msg.vector.z = 0;
+        msg.pose.pose.position.x = orca_gazebo::GaussianKernel(pos.x, GPS_STDDEV);
+        msg.pose.pose.position.y = orca_gazebo::GaussianKernel(pos.y, GPS_STDDEV);
+        msg.pose.pose.position.z = orca_gazebo::GaussianKernel(pos.z - SURFACE, GPS_STDDEV);
+        msg.pose.covariance[0] = GPS_STDDEV * GPS_STDDEV;
+        msg.pose.covariance[7] = GPS_STDDEV * GPS_STDDEV;
         gps_pub_.publish(msg);
 
         // Update transform
@@ -158,10 +167,9 @@ public:
       time_above_surface_ = 0;
     }
 
-    // Publish transform
-    // TODO should orca_base do this???
+    // Publish transform map => odom with the initial GPS reading
     gps_tf_.header.stamp = event.current_real;
-    tf_broadcaster_.sendTransform(gps_tf_);
+    //tf_broadcaster_.sendTransform(gps_tf_); TODO remove
   }
 };
 

@@ -3,6 +3,7 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/Pose.h>
+#include <nav_msgs/Odometry.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "orca_base/util.h"
 
@@ -103,6 +104,9 @@ constexpr double accel_to_effort_yaw(double accel_yaw) { return torque_to_effort
 // ENU, yaw == 0 when facing east, z == 0 at the surface
 //=====================================================================================
 
+// TODO add velocities
+// TODO add covariance matrices
+
 struct OrcaPose
 {
   double x;
@@ -115,13 +119,27 @@ struct OrcaPose
 
   void toMsg(geometry_msgs::Pose &msg) const
   {
-    tf2::Quaternion q;
-    q.setRPY(0, 0, yaw);
-    msg.orientation = tf2::toMsg(q);
-
     msg.position.x = x;
     msg.position.y = y;
     msg.position.z = z;
+
+    // Yaw to quaternion
+    tf2::Quaternion q;
+    q.setRPY(0, 0, yaw);
+    msg.orientation = tf2::toMsg(q);
+  }
+
+  void fromMsg(const nav_msgs::Odometry &msg)
+  {
+    x = msg.pose.pose.position.x;
+    y = msg.pose.pose.position.y;
+    z = msg.pose.pose.position.z;
+
+    // Quaternion to yaw
+    tf2::Quaternion q;
+    tf2::fromMsg(msg.pose.pose.orientation, q);
+    double roll, pitch;
+    tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
   }
 
   // Distance between 2 poses on the xy plane

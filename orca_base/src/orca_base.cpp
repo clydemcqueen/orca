@@ -104,15 +104,16 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   baro_sub_ = nh_priv_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
   battery_sub_ = nh_priv_.subscribe<orca_msgs::Battery>("/orca_driver/battery", 10, &OrcaBase::batteryCallback, this);
   goal_sub_ = nh_priv_.subscribe<geometry_msgs::PoseStamped>("/move_base_simple/goal", 10, &OrcaBase::goalCallback, this);
-  gps_sub_ = nh_priv_.subscribe<geometry_msgs::Vector3Stamped>("/gps", 10, &OrcaBase::gpsCallback, this);
+  gps_sub_ = nh_priv_.subscribe<geometry_msgs::PoseWithCovarianceStamped>("/gps", 10, &OrcaBase::gpsCallback, this);
   imu_sub_ = nh_priv_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_priv_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   leak_sub_ = nh_priv_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaBase::leakCallback, this);
+  odom_local_sub_ = nh_priv_.subscribe<nav_msgs::Odometry>("/odometry/local", 10, &OrcaBase::odomLocalCallback, this);
   ping_sub_ = nh_priv_.subscribe<std_msgs::Empty>("/ping", 10, &OrcaBase::pingCallback, this);
 
   // Advertise all topics that we'll publish on
   control_pub_ = nh_priv_.advertise<orca_msgs::Control>("control", 1);
-  odom_pub_ = nh_priv_.advertise<nav_msgs::Odometry>("/odom", 1);
+  odom_plan_pub_ = nh_priv_.advertise<nav_msgs::Odometry>("/odometry/plan", 1);
   thrust_marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("thrust_markers", 1);
   mission_plan_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_plan", 1);
   mission_actual_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_actual", 1);
@@ -156,24 +157,23 @@ void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     double roll, pitch, goal_yaw;
     tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, goal_yaw);
 
-    OrcaPose curr_pose(gps_position_.x(), gps_position_.y(), -depth_state_, yaw_state_);
     OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, -depth_state_, goal_yaw);
 
-    ROS_INFO("Start mission at (%g, %g), goal is (%g, %g), heading %g", curr_pose.x, curr_pose.y, goal_pose.x, goal_pose.y, goal_pose.yaw);
+    ROS_INFO("Start mission at (%g, %g), goal is (%g, %g), heading %g", odom_local_.x, odom_local_.y, goal_pose.x, goal_pose.y, goal_pose.yaw);
 
     mission_.reset(new SquareMission());
-    if (mission_->init(curr_pose, goal_pose))
+    if (mission_->init(odom_local_, goal_pose))
     {
       mission_plan_path_.header.stamp = ros::Time::now();
       mission_plan_path_.header.frame_id = "map";
       mission_plan_path_.poses.clear();
 
-      mission_actual_path_.header.stamp = ros::Time::now();
-      mission_actual_path_.header.frame_id = "map";
-      mission_actual_path_.poses.clear();
+      mission_estimated_path_.header.stamp = ros::Time::now();
+      mission_estimated_path_.header.frame_id = "map";
+      mission_estimated_path_.poses.clear();
 
       // Init plan
-      plan_ = curr_pose;
+      odom_plan_ = odom_local_;
 
       setMode(orca_msgs::Control::mission);
     }
@@ -189,27 +189,18 @@ void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 }
 
 // New GPS reading
-void OrcaBase::gpsCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg)
+void OrcaBase::gpsCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg)
 {
-  // Note the time
-  gps_msg_time_ = msg->header.stamp;
-
-  // Save the reading
-  gps_position_.setValue(msg->vector.x, msg->vector.y, msg->vector.z);
-
   if (!gps_ready_)
   {
     gps_ready_ = true;
-    ROS_INFO("GPS ready (%g, %g, %g)", msg->vector.x, msg->vector.y, msg->vector.z);
+    ROS_INFO("GPS ready (%g, %g, %g)", msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
   }
 }
 
 // New IMU reading
 void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 {
-  // Note the time
-  imu_msg_time_ = msg->header.stamp;
-
   // Compute base_orientation
   tf2::Quaternion imu_orientation;
   tf2::fromMsg(msg->orientation, imu_orientation);
@@ -256,39 +247,35 @@ void OrcaBase::pingCallback(const std_msgs::Empty::ConstPtr& msg)
   ping_time_ = ros::Time::now();
 }
 
+// Local odometry -- result from robot_localization, fusing all continuous sensors
+void OrcaBase::odomLocalCallback(const nav_msgs::Odometry::ConstPtr& msg)
+{
+  odom_local_.fromMsg(*msg);
+}
+
 void OrcaBase::publishOdom()
 {
-  if (imu_ready_ && barometer_ready_)
-  {
-    // Publish a transform from base_link to odom
-    geometry_msgs::TransformStamped odom_tf;
-    odom_tf.header.stamp = imu_msg_time_;
-    odom_tf.header.frame_id = "odom";
-    odom_tf.child_frame_id = "base_link";
-    odom_tf.transform.translation.x = 0; // position_.x();
-    odom_tf.transform.translation.y = 0; // position_.y();
-    odom_tf.transform.translation.z = -depth_state_;
-    odom_tf.transform.rotation = tf2::toMsg(base_orientation_);
-    tf_broadcaster_.sendTransform(odom_tf);
+  // TODO pull everything (including time) from motion planner; this is effectively the "keep station" planner
 
-#if 0
-    // Publish an odom message
-    nav_msgs::Odometry odom_msg;
-    odom_msg.header.stamp = imu_msg_time_;
-    odom_msg.header.frame_id = "odom";
-    odom_msg.child_frame_id = "base_link";
-    odom_msg.pose.pose.position.x = 0; // position_.x();
-    odom_msg.pose.pose.position.y = 0; // position_.y();
-    odom_msg.pose.pose.position.z = -depth_state_;
-    odom_msg.pose.pose.orientation = tf2::toMsg(base_orientation_);
-    odom_msg.twist.twist.angular = tf2::toMsg(angular_velocity_);
-    odom_msg.twist.twist.linear = tf2::toMsg(linear_velocity_);
-    // TODO compute covariance
-    odom_pub_.publish(odom_msg);
-#endif
+  nav_msgs::Odometry odom_msg;
+  odom_msg.header.stamp = ros::Time::now();
+  odom_msg.header.frame_id = "odom";
+
+  odom_msg.pose.pose.position.x = 0;
+  odom_msg.pose.pose.position.y = 0;
+  odom_msg.pose.pose.position.z = 0;
+  odom_msg.pose.pose.orientation = geometry_msgs::Quaternion();
+
+  odom_msg.twist.twist.linear = geometry_msgs::Vector3();
+  odom_msg.twist.twist.angular = geometry_msgs::Vector3();
+
+  for (int i = 0; i < 6; ++i)
+  {
+    odom_msg.pose.covariance[i * 6 + i] = 0.01;
+    odom_msg.twist.covariance[i * 6 + i] = 0.01;
   }
 
-  // TODO publish map => odom from GPS?
+  odom_plan_pub_.publish(odom_msg);
 }
 
 void OrcaBase::publishControl()
@@ -364,7 +351,7 @@ void OrcaBase::setMode(uint8_t new_mode)
     ping_time_ = ros::Time::now();
   }
 
-  if (depthHoldMode(new_mode))
+  if (depthHoldMode(new_mode)) // TODO move to keep station planner
   {
     // Set target depth
     depth_setpoint_ = depth_state_;
@@ -374,7 +361,7 @@ void OrcaBase::setMode(uint8_t new_mode)
     depth_trim_button_previous_ = false;
   }
 
-  if (headingHoldMode(new_mode))
+  if (headingHoldMode(new_mode)) // TODO move to keep station planner
   {
     // Set target angle
     yaw_setpoint_ = yaw_state_;
@@ -589,13 +576,12 @@ void OrcaBase::spinOnce()
   // Run a mission
   if (mode_ == orca_msgs::Control::mission)
   {
-    OrcaPose current_pose(gps_position_.x(), gps_position_.y(), -depth_state_, yaw_state_); // TODO OrcaBase.curr_
-    BaseMission::addToPath(mission_actual_path_, current_pose);
-    mission_actual_pub_.publish(mission_actual_path_);
+    BaseMission::addToPath(mission_estimated_path_, odom_local_);
+    mission_actual_pub_.publish(mission_estimated_path_);
 
-    if (mission_->advance(current_pose, plan_, efforts_))
+    if (mission_->advance(odom_local_, odom_plan_, efforts_))
     {
-      BaseMission::addToPath(mission_plan_path_, plan_);
+      BaseMission::addToPath(mission_plan_path_, odom_plan_);
       mission_plan_pub_.publish(mission_plan_path_);
 
       // TODO deadband?

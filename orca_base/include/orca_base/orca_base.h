@@ -2,7 +2,7 @@
 #define ORCA_BASE_H
 
 #include <ros/ros.h>
-#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Joy.h>
@@ -63,24 +63,22 @@ private:
   ros::Time ping_time_;               // Last time we heard from the topside
   ros::Time prev_loop_time_;          // Last time spinOnce was called
   uint8_t mode_;                      // Operating mode
+  OrcaPose odom_plan_;                // Planned state
+  OrcaPose odom_local_;               // Estimated state
 
   // Current mission
-  std::unique_ptr<BaseMission> mission_;
-  OrcaPose plan_;
-  nav_msgs::Path mission_plan_path_;
-  nav_msgs::Path mission_actual_path_;
+  std::unique_ptr<BaseMission> mission_;    // The mission we're running
+  nav_msgs::Path mission_plan_path_;        // The planned path (data from odom_plan_)
+  nav_msgs::Path mission_estimated_path_;   // Best estimate of the actual path (data from odom_local_)
 
   // Barometer
   bool barometer_ready_;              // True if we're receiving barometer messages
 
   // GPS
   bool gps_ready_;                    // True if we're receiving GPS messages
-  ros::Time gps_msg_time_;            // Time of last GPS message
-  tf2::Vector3 gps_position_;         // Last GPS reading
 
   // IMU
   bool imu_ready_;                    // True if we're receiving IMU messages
-  ros::Time imu_msg_time_;            // Time of last IMU message
   tf2::Quaternion base_orientation_;  // Orientation
   double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
 
@@ -121,22 +119,23 @@ private:
   ros::Subscriber imu_sub_;
   ros::Subscriber joy_sub_;
   ros::Subscriber leak_sub_;
+  ros::Subscriber odom_local_sub_;
   ros::Subscriber ping_sub_;
 
   // Callbacks
   void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
   void batteryCallback(const orca_msgs::Battery::ConstPtr &msg);
   void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
-  void gpsCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg);
+  void gpsCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg);
   void imuCallback(const sensor_msgs::Imu::ConstPtr &msg);
   void joyCallback(const sensor_msgs::Joy::ConstPtr &msg);
   void leakCallback(const orca_msgs::Leak::ConstPtr &msg);
+  void odomLocalCallback(const nav_msgs::Odometry::ConstPtr &msg);
   void pingCallback(const std_msgs::Empty::ConstPtr &msg);
   
   // Publications
   ros::Publisher control_pub_;                    // Thruster control messages
-  ros::Publisher odom_pub_;                       // Odometry messages
-  tf2_ros::TransformBroadcaster tf_broadcaster_;  // TF messages
+  ros::Publisher odom_plan_pub_;                  // Odometry messages
   ros::Publisher thrust_marker_pub_;              // Visualize thrust in rviz
   ros::Publisher mission_plan_pub_;               // Visualize planned path in rviz
   ros::Publisher mission_actual_pub_;             // Visualize actual path in rviz

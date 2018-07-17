@@ -25,7 +25,12 @@ catkin_package(
 )
 
 ## Set up include directories
-include_directories(${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})
+include_directories(
+  include
+  ${Boost_INCLUDE_DIR}
+  ${catkin_INCLUDE_DIRS}
+  ${GAZEBO_INCLUDE_DIRS}
+)
 
 ## Set up link directories
 link_directories(${GAZEBO_LIBRARY_DIRS})
@@ -52,3 +57,7 @@ target_link_libraries(OrcaGPSPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_library(OrcaBuoyancyPlugin src/buoyancy_plugin.cpp)
 add_dependencies(OrcaBuoyancyPlugin ${catkin_EXPORTED_TARGETS})
 target_link_libraries(OrcaBuoyancyPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_library(OrcaIMUPlugin src/imu_plugin.cpp)
+add_dependencies(OrcaIMUPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaIMUPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})

@@ -23,7 +23,7 @@ Select `ros-kinetic-desktop-full`; this will install Gazebo 7.0 as well.
 
 Install these additional packages:
 ~~~~
-sudo apt install ros-kinetic-imu-tools libqt5gstreamer-dev
+sudo apt install ros-kinetic-imu-tools libqt5gstreamer-dev ros-kinetic-robot-localization
 ~~~~
 
 Create a catkin workspace:

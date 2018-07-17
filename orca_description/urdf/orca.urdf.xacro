@@ -157,7 +157,7 @@
   </xacro:t200>
 
   <!--
-    The OrcaBuoyancyPlugin (provided by Orca) applies a force that counteracts gravity.
+    The OrcaBuoyancyPlugin applies a force that counteracts gravity.
     Buoyancy force is not applied if the link is above the surface of the water.
   -->
   <gazebo>
@@ -172,7 +172,7 @@
   </gazebo>
 
   <!--
-  The OrcaDragPlugin (provided by Orca) applies a drag force proportional to velocity^2.
+  The OrcaDragPlugin applies a drag force proportional to velocity^2.
   -->
   <gazebo>
     <plugin name="OrcaDragPlugin" filename="libOrcaDragPlugin.so">
@@ -188,7 +188,7 @@
   </gazebo>
 
   <!--
-    The ThrusterPlugin (provided by Orca) turns ROS messages into thrust forces. Each message contains an array of thrust efforts [-1.0, 1.0].
+    The OrcaThrusterPlugin turns ROS messages into thrust forces. Each message contains an array of thrust efforts [-1.0, 1.0].
     The URDF to SDF translation nukes the joints, so we need to copy/paste the joint locations here.
   -->
   <gazebo>
@@ -228,11 +228,11 @@
   </gazebo>
 
   <!--
-    The OrcaBarometerPlugin (provided by Orca, wraps a Gazebo altimeter sensor) simulates a barometer sensor such as the BlueRobotics Bar30.
+    The OrcaBarometerPlugin (wraps a Gazebo altimeter sensor) simulates a barometer sensor such as the BlueRobotics Bar30.
   -->
   <gazebo reference="base_link">
     <sensor name="barometer_sensor" type="altimeter">
-      <update_rate>10</update_rate> <!-- Match orca_driver rate -->
+      <update_rate>50</update_rate> <!-- Match orca_driver rate -->
       <plugin name="OrcaBarometerPlugin" filename="libOrcaBarometerPlugin.so">
         <ros_topic>/barometer</ros_topic>
         <fluid_density>${FLUID_DENSITY}</fluid_density>
@@ -241,27 +241,19 @@
   </gazebo>
 
   <!--
-    The GazeboRosImuSensor (provided by ROS, wraps a Gazebo IMU sensor) simulates an IMU sensor such as the Phidgets 1044.
+    The OrcaIMUPlugin (wraps a Gazebo IMU sensor) simulates an IMU sensor such as the Phidgets 1044.
   -->
   <gazebo reference="base_link">
     <gravity>true</gravity>
     <sensor name="imu_sensor" type="imu">
       <update_rate>125</update_rate> <!-- Match orca_driver rate -->
-      <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
-        <robotNamespace></robotNamespace>
-        <topicName>imu/data</topicName>
-        <updateRateHZ>125.0</updateRateHZ> <!-- Match orca_driver rate -->
-        <gaussianNoise>0.0</gaussianNoise>
-        <xyzOffset>0 0 0</xyzOffset>
-        <rpyOffset>0 0 0</rpyOffset>
-        <frameName>base_link</frameName>
-      </plugin>
+      <plugin name="OrcaIMUPlugin" filename="libOrcaIMUPlugin.so" />
       <pose>0 0 0 0 0 0</pose>
     </sensor>
   </gazebo>
 
   <!--
-    The GPSPlugin (provided by Orca) simulates a GPS receiver attached to an ROV.
+    The OrcaGPSPlugin simulates a GPS receiver attached to an ROV.
     When it goes underwater, the GPS signal is lost.
   -->
   <gazebo>
