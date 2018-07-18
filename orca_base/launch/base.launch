@@ -4,6 +4,7 @@
   <arg name="simulation" default="false" />
   <arg name="launch_complementary_filter" default="true" />
   <arg name="launch_madgwick_filter" default="false" />
+  <arg name="estimate_global_pose" default="true" />
 
   <!-- Load robot description and launch robot and state publishers -->
   <include file="$(find orca_description)/launch/description.launch" />
@@ -80,13 +81,11 @@
     <param name="gravitational_acceleration" value="9.80665" />
 
     <param name="use_control" value="false" /> <!-- Don't listen to cmd_vel -->
-    <param name="debug" value="true" />
-    <param name="debug_out_file" value="~/orca_catkin_ws/local_pose_debug_out.txt" />
     <!-- TODO set and tune process_noise_covariance -->
   </node>
 
   <!-- 2nd pose estimator UKF: fuse GPS to provide the map => odom transform for global navigation -->
-  <node pkg="robot_localization" type="ukf_localization_node" name="global_pose_estimator">
+  <node pkg="robot_localization" type="ukf_localization_node" name="global_pose_estimator" if="$(arg estimate_global_pose)">
     <remap from="/odometry/filtered" to="/odometry/global"/>
 
     <param name="frequency" value="10" />
@@ -122,9 +121,10 @@
     <param name="pose0_differential" value="false" />
 
     <param name="use_control" value="false" /> <!-- Don't listen to cmd_vel -->
-    <param name="debug" value="true" />
-    <param name="debug_out_file" value="~/orca_catkin_ws/global_pose_debug_out.txt" />
     <!-- TODO set and tune process_noise_covariance -->
   </node>
+
+  <!-- If we're not estimating the global pose, publish a static map => odom transform -->
+  <node pkg="tf" type="static_transform_publisher" name="map_odom_tf" args="0 0 0 0 0 0 map odom 100" unless="$(arg estimate_global_pose)" />
 
 </launch>

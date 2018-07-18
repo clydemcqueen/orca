@@ -12,6 +12,7 @@
     <arg name="simulation" value="true" />
     <arg name="launch_complementary_filter" value="false" /> <!-- Simulated IMU doesn't need a filter -->
     <arg name="launch_madgwick_filter" value="false" />
+    <arg name="estimate_global_pose" value="false" />
   </include>
     
   <!-- Run the gazebo model spawner; it will turn URDF into SDF and inject the model into the running world -->
