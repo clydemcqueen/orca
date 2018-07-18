@@ -32,9 +32,6 @@ namespace gazebo {
 // https://www.gps.gov/systems/gps/performance/accuracy/
 constexpr double GPS_STDDEV = 1.891 / 2;
 
-// Must match URDF setting
-constexpr double SURFACE = 10;
-
 class OrcaGPSPlugin : public ModelPlugin
 {
 private:
@@ -43,8 +40,6 @@ private:
   std::unique_ptr<ros::NodeHandle> nh_;
   ros::Timer timer_;
   ros::Publisher gps_pub_;
-  tf2_ros::TransformBroadcaster tf_broadcaster_;  // Publish tf messages
-  geometry_msgs::TransformStamped gps_tf_;
 
   double time_above_surface_ = 0;
   double mast_height_ = 0.50;
@@ -117,22 +112,11 @@ public:
     // Create timer
     timer_ = nh_->createTimer(ros::Duration(1.0), &OrcaGPSPlugin::TimerCallback, this);
 
-    // Initialize transform
-    gps_tf_.header.frame_id = "odom";
-    gps_tf_.child_frame_id = "base_link";
-    gps_tf_.transform.translation.x = 0;
-    gps_tf_.transform.translation.y = 0;
-    gps_tf_.transform.translation.z = 0;
-    gps_tf_.transform.rotation.x = 0;
-    gps_tf_.transform.rotation.y = 0;
-    gps_tf_.transform.rotation.z = 0;
-    gps_tf_.transform.rotation.w = 1;
-
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << std::endl;
   }
 
-  // Called by the ROS timer at 10Hz.
+  // Called by the ROS timer.
   void TimerCallback(const ros::TimerEvent &event)
   {
     // Is the GPS sensor above the water surface?
@@ -148,14 +132,10 @@ public:
         msg.header.stamp = event.current_real;
         msg.pose.pose.position.x = orca_gazebo::GaussianKernel(pos.x, GPS_STDDEV);
         msg.pose.pose.position.y = orca_gazebo::GaussianKernel(pos.y, GPS_STDDEV);
-        msg.pose.pose.position.z = orca_gazebo::GaussianKernel(pos.z - SURFACE, GPS_STDDEV);
+        msg.pose.pose.position.z = orca_gazebo::GaussianKernel(pos.z - surface_, GPS_STDDEV);
         msg.pose.covariance[0] = GPS_STDDEV * GPS_STDDEV;
         msg.pose.covariance[7] = GPS_STDDEV * GPS_STDDEV;
         gps_pub_.publish(msg);
-
-        // Update transform
-        gps_tf_.transform.translation.x = pos.x;
-        gps_tf_.transform.translation.y = pos.y;
       }
       else
       {
@@ -166,10 +146,6 @@ public:
     {
       time_above_surface_ = 0;
     }
-
-    // Publish transform map => odom with the initial GPS reading
-    gps_tf_.header.stamp = event.current_real;
-    //tf_broadcaster_.sendTransform(gps_tf_); TODO remove
   }
 };
 
