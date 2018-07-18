@@ -105,6 +105,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   battery_sub_ = nh_priv_.subscribe<orca_msgs::Battery>("/orca_driver/battery", 10, &OrcaBase::batteryCallback, this);
   goal_sub_ = nh_priv_.subscribe<geometry_msgs::PoseStamped>("/move_base_simple/goal", 10, &OrcaBase::goalCallback, this);
   gps_sub_ = nh_priv_.subscribe<geometry_msgs::PoseWithCovarianceStamped>("/gps", 10, &OrcaBase::gpsCallback, this);
+  ground_truth_sub_ = nh_priv_.subscribe<geometry_msgs::PoseStamped>("/ground_truth", 10, &OrcaBase::groundTruthCallback, this);
   imu_sub_ = nh_priv_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_priv_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   leak_sub_ = nh_priv_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaBase::leakCallback, this);
@@ -117,6 +118,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   thrust_marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("thrust_markers", 1);
   mission_plan_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_plan", 1);
   mission_actual_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_actual", 1);
+  mission_ground_truth_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_ground_truth", 1);
 }
 
 // New barometer reading
@@ -149,7 +151,7 @@ void OrcaBase::batteryCallback(const orca_msgs::Battery::ConstPtr& battery_msg)
 // New 2D goal
 void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 {
-  if (mode_ != orca_msgs::Control::disarmed && barometer_ready_ && gps_ready_ && imu_ready_)
+  if (mode_ != orca_msgs::Control::disarmed && barometer_ready_ && imu_ready_)
   {
     // Pull out yaw (kinda cumbersome)
     tf2::Quaternion goal_orientation;
@@ -157,23 +159,23 @@ void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     double roll, pitch, goal_yaw;
     tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, goal_yaw);
 
-    OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, -depth_state_, goal_yaw);
-
-    ROS_INFO("Start mission at (%g, %g), goal is (%g, %g), heading %g", odom_local_.x, odom_local_.y, goal_pose.x, goal_pose.y, goal_pose.yaw);
-
+    OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, odom_local_.z, goal_yaw);
+    ROS_INFO("Start mission at (%g, %g, %g), goal is (%g, %g, %g), heading %g", odom_plan_.x, odom_plan_.y, odom_plan_.z, goal_pose.x, goal_pose.y, goal_pose.z, goal_pose.yaw);
     mission_.reset(new SquareMission());
-    if (mission_->init(odom_local_, goal_pose))
+
+    if (mission_->init(odom_plan_, goal_pose))
     {
       mission_plan_path_.header.stamp = ros::Time::now();
-      mission_plan_path_.header.frame_id = "map";
+      mission_plan_path_.header.frame_id = "odom";
       mission_plan_path_.poses.clear();
 
       mission_estimated_path_.header.stamp = ros::Time::now();
-      mission_estimated_path_.header.frame_id = "map";
+      mission_estimated_path_.header.frame_id = "odom";
       mission_estimated_path_.poses.clear();
 
-      // Init plan
-      odom_plan_ = odom_local_;
+      mission_ground_truth_path_.header.stamp = ros::Time::now();
+      mission_ground_truth_path_.header.frame_id = "odom";
+      mission_ground_truth_path_.poses.clear();
 
       setMode(orca_msgs::Control::mission);
     }
@@ -184,7 +186,7 @@ void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
   }
   else
   {
-    ROS_ERROR("Can't start mission; possible reasons: disarmed, barometer not ready, GPS not ready, IMU not ready");
+    ROS_ERROR("Can't start mission; possible reasons: disarmed, barometer not ready, IMU not ready");
   }
 }
 
@@ -196,6 +198,18 @@ void OrcaBase::gpsCallback(const geometry_msgs::PoseWithCovarianceStamped::Const
     gps_ready_ = true;
     ROS_INFO("GPS ready (%g, %g, %g)", msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
   }
+}
+
+// New ground truth message
+void OrcaBase::groundTruthCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
+{
+  if (!ground_truth_ready_)
+  {
+    ground_truth_ready_ = true;
+    ROS_INFO("Ground truth available");
+  }
+
+  odom_ground_truth_.fromMsg(*msg);
 }
 
 // New IMU reading
@@ -261,10 +275,7 @@ void OrcaBase::publishOdom()
   odom_msg.header.stamp = ros::Time::now();
   odom_msg.header.frame_id = "odom";
 
-  odom_msg.pose.pose.position.x = 0;
-  odom_msg.pose.pose.position.y = 0;
-  odom_msg.pose.pose.position.z = 0;
-  odom_msg.pose.pose.orientation = geometry_msgs::Quaternion();
+  odom_plan_.toMsg(odom_msg.pose.pose);
 
   odom_msg.twist.twist.linear = geometry_msgs::Vector3();
   odom_msg.twist.twist.angular = geometry_msgs::Vector3();
@@ -578,6 +589,9 @@ void OrcaBase::spinOnce()
   {
     BaseMission::addToPath(mission_estimated_path_, odom_local_);
     mission_actual_pub_.publish(mission_estimated_path_);
+
+    BaseMission::addToPath(mission_ground_truth_path_, odom_ground_truth_);
+    mission_ground_truth_pub_.publish(mission_ground_truth_path_);
 
     if (mission_->advance(odom_local_, odom_plan_, efforts_))
     {

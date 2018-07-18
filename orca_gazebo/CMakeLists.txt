@@ -61,3 +61,7 @@ target_link_libraries(OrcaBuoyancyPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES}
 add_library(OrcaIMUPlugin src/imu_plugin.cpp)
 add_dependencies(OrcaIMUPlugin ${catkin_EXPORTED_TARGETS})
 target_link_libraries(OrcaIMUPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_library(OrcaGroundTruthPlugin src/ground_truth_plugin.cpp)
+add_dependencies(OrcaGroundTruthPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaGroundTruthPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})

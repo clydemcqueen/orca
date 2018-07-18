@@ -266,4 +266,15 @@
     </plugin>
   </gazebo>
 
+  <!--
+    The OrcaGroundTruthPlugin publishes a ground truth pose.
+  -->
+  <gazebo>
+    <plugin name="OrcaGroundTruthPlugin" filename="libOrcaGroundTruthPlugin.so">
+      <link name="base_link" />
+      <ros_topic>/gps</ros_topic>
+      <surface>${SURFACE}</surface>
+    </plugin>
+  </gazebo>
+
 </robot>

@@ -3,16 +3,6 @@
 namespace orca_base {
 
 //=====================================================================================
-// Constants
-//=====================================================================================
-
-constexpr double VELO_XY = 0.5;                 // Velocity for xy motion (m/s)
-constexpr double VELO_Z = 0.3;                  // Velocity for z motion (m/s)
-constexpr double EPSILON_PLAN_XYZ = 0.05;       // Close enough for xyz motion (m)
-constexpr double VELO_YAW = M_PI / 10;          // Rotation velocity (r/s)
-constexpr double EPSILON_PLAN_YAW = M_PI / 90;  // Close enough for yaw motion (r)
-
-//=====================================================================================
 // Utilities
 //=====================================================================================
 
@@ -78,10 +68,10 @@ bool BaseMotion::init(const OrcaPose &start, const OrcaPose &goal)
   ff_ = OrcaPose{};
 
   // Init PID controllers
-  x_controller_.setTarget(pose_.x);
-  y_controller_.setTarget(pose_.y);
-  z_controller_.setTarget(pose_.z);
-  yaw_controller_.setTarget(pose_.yaw);
+  x_controller_.setTarget(start.x);
+  y_controller_.setTarget(start.y);
+  z_controller_.setTarget(start.z);
+  yaw_controller_.setTarget(start.yaw);
 
   // Always succeed
   return true;
@@ -106,7 +96,7 @@ bool BaseMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::
   efforts.yaw = accel_to_effort_yaw(u_bar.yaw);
 
   // Convert from world frame to body frame
-  efforts.vertical = -z_effort; // TODO ???
+  efforts.vertical = -z_effort;
   rotate_frame(x_effort, y_effort, curr.yaw, efforts.forward, efforts.strafe);
 
   // Never stop
@@ -179,7 +169,7 @@ bool LineMotion::init(const OrcaPose &start, const OrcaPose &goal)
   // Drag force => thrust force => acceleration => feedforward
   drag_force_to_accel_xy(goal.yaw, VELO_XY * cos(angle_to_goal), VELO_XY * sin(angle_to_goal), ff_.x, ff_.y);
 
-  ROS_DEBUG("Line init: start (%g, %g), goal (%g, %g), ff (%g, %g)", start.x, start.y, goal.x, goal.y, ff_.x, ff_.y);
+  ROS_DEBUG("Line init: start (%g, %g, %g), goal (%g, %g, %g), ff (%g, %g, %g)", start.x, start.y, start.z, goal.x, goal.y, goal.z, ff_.x, ff_.y, ff_.z);
   return true;
 }
 

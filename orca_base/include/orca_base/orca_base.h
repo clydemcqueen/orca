@@ -65,20 +65,21 @@ private:
   uint8_t mode_;                      // Operating mode
   OrcaPose odom_plan_;                // Planned state
   OrcaPose odom_local_;               // Estimated state
+  OrcaPose odom_ground_truth_;        // Ground truth
 
   // Current mission
-  std::unique_ptr<BaseMission> mission_;    // The mission we're running
-  nav_msgs::Path mission_plan_path_;        // The planned path (data from odom_plan_)
-  nav_msgs::Path mission_estimated_path_;   // Best estimate of the actual path (data from odom_local_)
+  std::unique_ptr<BaseMission> mission_;      // The mission we're running
+  nav_msgs::Path mission_plan_path_;          // The planned path (data from odom_plan_)
+  nav_msgs::Path mission_estimated_path_;     // Best estimate of the actual path (data from odom_local_)
+  nav_msgs::Path mission_ground_truth_path_;  // Ground truth (data from odom_ground_truth_)
 
-  // Barometer
+  // Sensor status
   bool barometer_ready_;              // True if we're receiving barometer messages
-
-  // GPS
   bool gps_ready_;                    // True if we're receiving GPS messages
+  bool ground_truth_ready_;           // True if we're receiving ground truth messages
+  bool imu_ready_;                    // True if we're receiving IMU messages
 
   // IMU
-  bool imu_ready_;                    // True if we're receiving IMU messages
   tf2::Quaternion base_orientation_;  // Orientation
   double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
 
@@ -116,6 +117,7 @@ private:
   ros::Subscriber battery_sub_;
   ros::Subscriber goal_sub_;
   ros::Subscriber gps_sub_;
+  ros::Subscriber ground_truth_sub_;
   ros::Subscriber imu_sub_;
   ros::Subscriber joy_sub_;
   ros::Subscriber leak_sub_;
@@ -126,7 +128,8 @@ private:
   void baroCallback(const orca_msgs::Barometer::ConstPtr &msg);
   void batteryCallback(const orca_msgs::Battery::ConstPtr &msg);
   void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
-  void gpsCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg);
+  void gpsCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg);
+  void groundTruthCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
   void imuCallback(const sensor_msgs::Imu::ConstPtr &msg);
   void joyCallback(const sensor_msgs::Joy::ConstPtr &msg);
   void leakCallback(const orca_msgs::Leak::ConstPtr &msg);
@@ -139,6 +142,7 @@ private:
   ros::Publisher thrust_marker_pub_;              // Visualize thrust in rviz
   ros::Publisher mission_plan_pub_;               // Visualize planned path in rviz
   ros::Publisher mission_actual_pub_;             // Visualize actual path in rviz
+  ros::Publisher mission_ground_truth_pub_;       // Visualize ground truth in rviz
 
   // Helpers
   void publishControl();

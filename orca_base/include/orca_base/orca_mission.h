@@ -71,9 +71,22 @@ class SquareMission: public BaseMission
 {
 private:
 
-  constexpr static int NO_GOAL = -1;
-  int phase_ = NO_GOAL;
-  std::vector<OrcaPose>goals_;
+  enum class Planner
+  {
+    start,
+    vertical,
+    rotate,
+    line
+  };
+
+  struct Segment
+  {
+    Planner planner;
+    OrcaPose goal;
+  };
+
+  int segment_;
+  std::vector<Segment>segments_;
 
 public:
 

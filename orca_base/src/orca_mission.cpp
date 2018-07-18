@@ -114,80 +114,80 @@ constexpr bool is_rotate_phase(int p) { return p % 2 == 0; }
 
 bool SquareMission::init(const OrcaPose &start, const OrcaPose &goal)
 {
-  // Clear previous goals, if any
-  goals_.clear();
+  constexpr double TARGET_DEPTH = -9;
+
+  // Clear previous segments, if any
+  segments_.clear();
+
+  // Start
+  segments_.push_back(Segment{Planner::start, start});
+
+  if (std::abs(start.z - TARGET_DEPTH) > EPSILON_PLAN_XYZ)
+  {
+    // Descend/ascend to target depth
+    segments_.push_back(Segment{Planner::vertical, OrcaPose(start.x, start.y, TARGET_DEPTH, start.yaw)});
+  }
 
   bool north_first = goal.y > start.y;  // North or south first?
   bool east_first = goal.x > start.x;   // East or west first?
 
   // First leg
-  goals_.push_back(OrcaPose(start.x, start.y, UNDER_SURFACE_Z, north_first ? M_PI_2 : -M_PI_2)); // Turn
-  goals_.push_back(OrcaPose(start.x, goal.y, UNDER_SURFACE_Z, north_first ? M_PI_2 : -M_PI_2)); // Move
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(start.x, start.y, TARGET_DEPTH, north_first ? M_PI_2 : -M_PI_2)});
+  segments_.push_back(Segment{Planner::line, OrcaPose(start.x, goal.y, TARGET_DEPTH, north_first ? M_PI_2 : -M_PI_2)});
 
   // Second leg
-  goals_.push_back(OrcaPose(start.x, goal.y, UNDER_SURFACE_Z, east_first ? 0 : M_PI)); // Turn
-  goals_.push_back(OrcaPose(goal.x, goal.y, UNDER_SURFACE_Z, east_first ? 0 : M_PI)); // Move
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(start.x, goal.y, TARGET_DEPTH, east_first ? 0 : M_PI)});
+  segments_.push_back(Segment{Planner::line, OrcaPose(goal.x, goal.y, TARGET_DEPTH, east_first ? 0 : M_PI)});
 
   // Third leg
-  goals_.push_back(OrcaPose(goal.x, goal.y, UNDER_SURFACE_Z, north_first ? -M_PI_2 : M_PI_2)); // Turn
-  goals_.push_back(OrcaPose(goal.x, start.y, UNDER_SURFACE_Z, north_first ? -M_PI_2 : M_PI_2)); // Move
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(goal.x, goal.y, TARGET_DEPTH, north_first ? -M_PI_2 : M_PI_2)});
+  segments_.push_back(Segment{Planner::line, OrcaPose(goal.x, start.y, TARGET_DEPTH, north_first ? -M_PI_2 : M_PI_2)});
 
   // Fourth leg
-  goals_.push_back(OrcaPose(goal.x, start.y, UNDER_SURFACE_Z, east_first ? M_PI : 0)); // Turn
-  goals_.push_back(OrcaPose(start.x, start.y, UNDER_SURFACE_Z, east_first ? M_PI : 0)); // Move
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(goal.x, start.y, TARGET_DEPTH, east_first ? M_PI : 0)});
+  segments_.push_back(Segment{Planner::line, OrcaPose(start.x, start.y, TARGET_DEPTH, east_first ? M_PI : 0)});
 
   // Final turn
-  goals_.push_back(OrcaPose(start.x, start.y, UNDER_SURFACE_Z, goal.yaw)); // Turn
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(start.x, start.y, TARGET_DEPTH, goal.yaw)});
 
-  // Start phase 0
-  phase_ = 0;
-  OrcaPose start2 = start;
-  start2.z = UNDER_SURFACE_Z;
-  planner_.reset(new RotateMotion);
-  if (!planner_->init(start2, goals_[0]))
-  {
-    ROS_ERROR("Can't init SquareMission phase 1");
-    return false;
-  }
-
+  // Start
+  segment_ = 0;
   last_time_ = ros::Time::now();
+
   return true;
 }
 
+// TODO move to base class
 bool SquareMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts)
 {
   BaseMission::advance(curr, plan, efforts);
 
-  if (phase_ == NO_GOAL)
-  {
-    return false;
-  }
-
   // Update the plan
-  if (!planner_->advance(dt_, curr, plan, efforts))
+  if (!planner_ || !planner_->advance(dt_, curr, plan, efforts))
   {
-    // That phase is done
-    if (++phase_ >= goals_.size())
+    if (++segment_ >= segments_.size()) // Skips segment 0, which is the start segment
     {
-      // Mission is complete
-      phase_ = NO_GOAL;
+      // Mission complete
       return false;
     }
     else
     {
-      // Start the next phase
-      if (is_rotate_phase(phase_))
+      switch (segments_[segment_].planner)
       {
-        planner_.reset(new RotateMotion);
-      }
-      else
-      {
-        planner_.reset(new LineMotion);
+        case Planner::vertical:
+          planner_.reset(new VerticalMotion);
+          break;
+        case Planner::rotate:
+          planner_.reset(new RotateMotion);
+          break;
+        default:
+          planner_.reset(new LineMotion);
+          break;
       }
 
-      if (!planner_->init(goals_[phase_ - 1], goals_[phase_]))
+      if (!planner_->init(segments_[segment_ - 1].goal, segments_[segment_].goal))
       {
-        ROS_ERROR("Can't init SquareMission phase %d", phase_);
+        ROS_ERROR("Can't init SquareMission phase %d", segment_);
         return false;
       }
     }

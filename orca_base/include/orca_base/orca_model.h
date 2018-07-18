@@ -2,7 +2,7 @@
 #define ORCA_MODEL_H
 
 #include <ros/ros.h>
-#include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include "orca_base/util.h"
@@ -138,6 +138,19 @@ struct OrcaPose
     // Quaternion to yaw
     tf2::Quaternion q;
     tf2::fromMsg(msg.pose.pose.orientation, q);
+    double roll, pitch;
+    tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+  }
+
+  void fromMsg(const geometry_msgs::PoseStamped &msg)
+  {
+    x = msg.pose.position.x;
+    y = msg.pose.position.y;
+    z = msg.pose.position.z;
+
+    // Quaternion to yaw TODO util
+    tf2::Quaternion q;
+    tf2::fromMsg(msg.pose.orientation, q);
     double roll, pitch;
     tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
   }
