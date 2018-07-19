@@ -1,7 +1,10 @@
 #ifndef ORCA_GAZEBO_UTIL_H
 #define ORCA_GAZEBO_UTIL_H
 
+#include <gazebo/gazebo.hh>
+
 #include <geometry_msgs/Vector3.h>
+#include <geometry_msgs/Quaternion.h>
 
 namespace orca_gazebo {
 

@@ -65,3 +65,6 @@ target_link_libraries(OrcaIMUPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 add_library(OrcaGroundTruthPlugin src/ground_truth_plugin.cpp)
 add_dependencies(OrcaGroundTruthPlugin ${catkin_EXPORTED_TARGETS})
 target_link_libraries(OrcaGroundTruthPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_executable(orca_gazebo_test src/test.cpp)
+target_link_libraries(orca_gazebo_test ${catkin_LIBRARIES})
