@@ -29,10 +29,6 @@ protected:
   // Goal state
   OrcaPose goal_;
 
-  // Planned motion, updated at every timestep
-  OrcaPose pose_;
-  OrcaPose velo_;
-
   // Feedforward = planned acceleration + acceleration due to drag
   OrcaPose ff_;
 
@@ -45,10 +41,10 @@ protected:
 public:
 
   // Initialize the motion plan, return true if successful
-  virtual bool init(const OrcaPose &start, const OrcaPose &goal);
+  virtual bool init(const OrcaPose &goal, OrcaOdometry &plan);
 
   // Advance the motion plan, return true to continue, false if we're done
-  virtual bool advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts);
+  virtual bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts);
 };
 
 //=====================================================================================
@@ -64,8 +60,8 @@ class RotateMotion: public BaseMotion
 {
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal) override;
-  bool advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
+  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
 };
 
 //=====================================================================================
@@ -83,8 +79,8 @@ class LineMotion: public BaseMotion
 {
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal) override;
-  bool advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
+  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
 };
 
 //=====================================================================================
@@ -144,8 +140,8 @@ private:
 
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal) override;
-  bool advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
+  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
 };
 
 //=====================================================================================
@@ -161,8 +157,8 @@ class VerticalMotion: public BaseMotion
 {
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal) override;
-  bool advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
+  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
 };
 
 } // namespace orca_base

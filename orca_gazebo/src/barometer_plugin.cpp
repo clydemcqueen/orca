@@ -113,7 +113,7 @@ public:
     pose_msg.header.stamp = ros::Time::now();
     pose_msg.pose.covariance[14] = DEPTH_STDDEV * DEPTH_STDDEV;
 
-    double depth = orca_gazebo::GaussianKernel(-altimeter_->Altitude(), DEPTH_STDDEV);
+    double depth = orca_gazebo::gaussianKernel(-altimeter_->Altitude(), DEPTH_STDDEV);
 
     // The altimeter sensor zeros out when it starts, so we don't need to subtract the distance to the surface
     if (depth >= 0.0)

@@ -2,6 +2,7 @@
 #define ORCA_UTIL_H
 
 #include <cstdint>
+#include <math.h>
 
 namespace orca_base {
 

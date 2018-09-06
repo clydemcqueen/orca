@@ -63,7 +63,7 @@ private:
   ros::Time ping_time_;               // Last time we heard from the topside
   ros::Time prev_loop_time_;          // Last time spinOnce was called
   uint8_t mode_;                      // Operating mode
-  OrcaPose odom_plan_;                // Planned state
+  OrcaOdometry odom_plan_;            // Planned state
   OrcaPose odom_local_;               // Estimated state
   OrcaPose odom_ground_truth_;        // Ground truth
 
@@ -129,7 +129,7 @@ private:
   void batteryCallback(const orca_msgs::Battery::ConstPtr &msg);
   void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
   void gpsCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg);
-  void groundTruthCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
+  void groundTruthCallback(const nav_msgs::Odometry::ConstPtr &msg);
   void imuCallback(const sensor_msgs::Imu::ConstPtr &msg);
   void joyCallback(const sensor_msgs::Joy::ConstPtr &msg);
   void leakCallback(const orca_msgs::Leak::ConstPtr &msg);

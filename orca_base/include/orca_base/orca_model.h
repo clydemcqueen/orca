@@ -13,6 +13,7 @@ namespace orca_base {
 // Vehicle specs, in the body frame (x forward, y left, z up)
 //=====================================================================================
 
+constexpr double GRAVITY = 9.80665;
 constexpr double FLUID_DENSITY = 1029;    // Fluid density of seawater
 
 constexpr double ROV_DIM_X = 0.457;       // Length
@@ -26,6 +27,7 @@ constexpr double ROV_AREA_Y = ROV_DIM_X * ROV_DIM_Z;  // Area of top and bottom
 constexpr double ROV_AREA_Z = ROV_DIM_X * ROV_DIM_Y;  // Area of left (port) and right (starboard) sides
 
 constexpr double ORCA_MASS = 10;
+constexpr double ORCA_VOLUME = 0.01;
 
 // Assume a uniform distribution of mass in the vehicle box
 constexpr double MOMENT_OF_INERTIA_YAW = ORCA_MASS / 12.0 * (ROV_DIM_X * ROV_DIM_X + ROV_DIM_Y * ROV_DIM_Y);
@@ -38,6 +40,10 @@ constexpr double T200_MAX_NEG_FORCE = 40;
 
 // Estimate maximum yaw torque by looking at 4 thrusters (2 forward, 2 reverse), each mounted ~tangent to a circle with radius = 18cm
 constexpr double MAX_TORQUE_YAW = 0.18 * 2.0 * (T200_MAX_POS_FORCE + T200_MAX_NEG_FORCE);
+
+constexpr double DISPLACED_MASS = ORCA_VOLUME * FLUID_DENSITY;
+constexpr double WEIGHT_IN_WATER = GRAVITY * (ORCA_MASS - DISPLACED_MASS);
+constexpr double HOVER_ACCEL_Z = WEIGHT_IN_WATER / ORCA_MASS; // Z acceleration required to hover
 
 //=====================================================================================
 // Drag constants, in the body frame (x forward, y left, z up)
@@ -79,7 +85,7 @@ constexpr double drag_torque_yaw(double velo_yaw) { return velo_yaw * std::abs(v
 
 // Force / torque => acceleration
 constexpr double force_to_accel_xy(double force_xy) { return force_xy / ORCA_MASS; }
-constexpr double force_to_accel_z(double force_z) { return force_z / ORCA_MASS; } // TODO add buoyancy and gravity
+constexpr double force_to_accel_z(double force_z) { return force_z / ORCA_MASS; } // TODO combine _xy and _z forms
 constexpr double torque_to_accel_yaw(double torque_yaw) { return torque_yaw / MOMENT_OF_INERTIA_YAW; }
 
 // Force / torque => effort
@@ -103,9 +109,6 @@ constexpr double accel_to_effort_yaw(double accel_yaw) { return torque_to_effort
 // 4 DoF pose, in the world frame
 // ENU, yaw == 0 when facing east, z == 0 at the surface
 //=====================================================================================
-
-// TODO add velocities
-// TODO add covariance matrices
 
 struct OrcaPose
 {
@@ -156,21 +159,86 @@ struct OrcaPose
   }
 
   // Distance between 2 poses on the xy plane
-  constexpr double distance_xy(const OrcaPose &that) const
+  double distance_xy(const OrcaPose &that) const
   {
     return std::hypot(x - that.x, y - that.y);
   }
 
   // Z distance between 2 poses
-  constexpr double distance_z(const OrcaPose &that) const
+  double distance_z(const OrcaPose &that) const
   {
     return std::abs(z - that.z);
   }
 
   // Yaw distance between 2 poses
-  constexpr double distance_yaw(const OrcaPose &that) const
+  double distance_yaw(const OrcaPose &that) const
   {
     return std::abs(norm_angle(yaw - that.yaw));
+  }
+};
+
+//=====================================================================================
+// 4 DoF odometry, in the world frame
+//=====================================================================================
+
+constexpr double DEF_COVAR = 0.05;
+
+struct OrcaOdometry
+{
+  OrcaPose pose;
+  std::array<double, 16> pose_covariance;
+
+  OrcaPose velo;
+  std::array<double, 16> velo_covariance;
+
+  OrcaOdometry()
+  {
+    pose_covariance.fill(0);
+    velo_covariance.fill(0);
+
+    for (int i = 0; i < 4; ++i)
+    {
+      pose_covariance[i + 4 * i] = DEF_COVAR;
+      velo_covariance[i + 4 * i] = DEF_COVAR;
+    }
+  }
+
+  void stopMotion()
+  {
+    velo = OrcaPose{};
+  }
+
+  // Create a 6x6 covariance matrix (x, y, z, roll, pitch, yaw) from a 4x4 matrix (x, y, z, yaw)
+  static void covar4to6(const std::array<double, 16> &four, boost::array<double, 36> &six)
+  {
+    six.fill(0);
+
+    six[21] = DEF_COVAR; // roll diag
+    six[28] = DEF_COVAR; // pitch diag
+
+    for (int i = 0; i < 4; ++i)
+    {
+      for (int j = 0; j < 4; ++j)
+      {
+        six[(i < 3 ? i : i + 2) * 6 + (j < 3 ? j : j + 2)] = four[i * 4 + j];
+      }
+    }
+  }
+
+  void toMsg(nav_msgs::Odometry &msg) const
+  {
+    pose.toMsg(msg.pose.pose);
+
+    msg.twist.twist.linear.x = velo.x;
+    msg.twist.twist.linear.y = velo.y;
+    msg.twist.twist.linear.z = velo.z;
+
+    msg.twist.twist.angular.x = 0;
+    msg.twist.twist.angular.y = 0;
+    msg.twist.twist.angular.z = velo.yaw;
+
+    covar4to6(pose_covariance, msg.pose.covariance);
+    covar4to6(velo_covariance, msg.twist.covariance);
   }
 };
 

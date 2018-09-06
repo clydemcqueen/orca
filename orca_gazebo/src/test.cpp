@@ -13,7 +13,7 @@ void testGaussianKernel()
 
   for (int s = 0; s < 10000; ++s)
   {
-    double m = orca_gazebo::GaussianKernel(MEAN, STDDEV);
+    double m = orca_gazebo::gaussianKernel(MEAN, STDDEV);
     int i = static_cast<int>(m / BUCKET_WIDTH);
     if (i < 0) i = 0;
     if (i >= NUM_BUCKETS) i = NUM_BUCKETS - 1;

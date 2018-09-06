@@ -130,9 +130,9 @@ public:
         geometry_msgs::PoseWithCovarianceStamped msg;
         msg.header.frame_id = "odom";
         msg.header.stamp = event.current_real;
-        msg.pose.pose.position.x = orca_gazebo::GaussianKernel(pos.x, GPS_STDDEV);
-        msg.pose.pose.position.y = orca_gazebo::GaussianKernel(pos.y, GPS_STDDEV);
-        msg.pose.pose.position.z = orca_gazebo::GaussianKernel(pos.z - surface_, GPS_STDDEV);
+        msg.pose.pose.position.x = orca_gazebo::gaussianKernel(pos.x, GPS_STDDEV);
+        msg.pose.pose.position.y = orca_gazebo::gaussianKernel(pos.y, GPS_STDDEV);
+        msg.pose.pose.position.z = orca_gazebo::gaussianKernel(pos.z - surface_, GPS_STDDEV);
         msg.pose.covariance[0] = GPS_STDDEV * GPS_STDDEV;
         msg.pose.covariance[7] = GPS_STDDEV * GPS_STDDEV;
         gps_pub_.publish(msg);

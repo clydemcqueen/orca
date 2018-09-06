@@ -22,8 +22,8 @@ protected:
 
 public:
 
-  virtual bool init(const OrcaPose &start, const OrcaPose &goal) = 0;
-  virtual bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts);
+  virtual bool init(const OrcaPose &goal, OrcaOdometry &plan) = 0;
+  virtual bool advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts);
 
   static void addToPath(nav_msgs::Path &path, const OrcaPose &pose);
   static void addToPath(nav_msgs::Path &path, const std::vector<OrcaPose> &poses);
@@ -56,8 +56,8 @@ private:
 
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal /*, nav_msgs::Path &path*/) override;
-  bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
+  bool advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
 };
 
 //=====================================================================================
@@ -73,7 +73,6 @@ private:
 
   enum class Planner
   {
-    start,
     vertical,
     rotate,
     line
@@ -90,8 +89,8 @@ private:
 
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal /*, nav_msgs::Path &path*/) override;
-  bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
+  bool advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
 };
 
 //=====================================================================================
@@ -105,8 +104,8 @@ class ArcMission: public BaseMission
 {
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal) override;
-  bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
+  bool advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
 };
 
 //=====================================================================================
@@ -119,8 +118,8 @@ class VerticalMission: public BaseMission
 {
 public:
 
-  bool init(const OrcaPose &start, const OrcaPose &goal) override;
-  bool advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts) override;
+  bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
+  bool advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
 };
 
 } // namespace orca_base

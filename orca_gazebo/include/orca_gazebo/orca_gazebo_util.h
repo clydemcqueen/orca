@@ -8,7 +8,7 @@
 
 namespace orca_gazebo {
 
-double GaussianKernel(double mean, double stddev)
+double gaussianKernel(double mean, double stddev)
 {
   // Get 2 random numbers from a uniform distribution
   static unsigned int seed = 0;
@@ -23,18 +23,18 @@ double GaussianKernel(double mean, double stddev)
 }
 
 // Assume x, y and z are independent, e.g., MEMS accelerometers or gyros
-void AddNoise(const double stddev, ignition::math::Vector3d &v)
+void addNoise(const double stddev, ignition::math::Vector3d &v)
 {
-  v.X() = GaussianKernel(v.X(), stddev);
-  v.Y() = GaussianKernel(v.Y(), stddev);
-  v.Z() = GaussianKernel(v.Z(), stddev);
+  v.X() = gaussianKernel(v.X(), stddev);
+  v.Y() = gaussianKernel(v.Y(), stddev);
+  v.Z() = gaussianKernel(v.Z(), stddev);
 }
 
 // Assume r, p and y are independent, e.g., MEMS magnetometers
-void AddNoise(const double stddev, ignition::math::Quaterniond &q)
+void addNoise(const double stddev, ignition::math::Quaterniond &q)
 {
   ignition::math::Vector3d v = q.Euler();
-  AddNoise(stddev, v);
+  addNoise(stddev, v);
   q.Euler(v);
 }
 

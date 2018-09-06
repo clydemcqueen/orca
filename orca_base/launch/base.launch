@@ -45,8 +45,8 @@
     <!-- Odometry, frame=odom -->
     <param name="odom0" value="odometry/plan" />
     <rosparam param="odom0_config">
-      [true, true, true,
-      true, true, true,
+      [false, false, false,
+      false, false, false,
       true, true, true,
       true, true, true,
       false, false, false]
@@ -81,6 +81,9 @@
     <param name="gravitational_acceleration" value="9.80665" />
 
     <param name="use_control" value="false" /> <!-- Don't listen to cmd_vel -->
+    <param name="publish_acceleration" value="true" />
+    <param name="debug" value="true" />
+    <param name="debug_out_file" value="/home/clyde/orca_catkin_ws/local_pose_debug_out.txt" />
     <!-- TODO set and tune process_noise_covariance -->
   </node>
 

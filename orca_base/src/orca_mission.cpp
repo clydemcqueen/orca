@@ -23,7 +23,7 @@ void BaseMission::addToPath(nav_msgs::Path &path, const std::vector<OrcaPose> &p
   }
 }
 
-bool BaseMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts)
+bool BaseMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
   efforts.clear();
 
@@ -37,12 +37,12 @@ bool BaseMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &eff
 // SurfaceMission
 //=====================================================================================
 
-bool SurfaceMission::init(const OrcaPose &start, const OrcaPose &goal)
+bool SurfaceMission::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
-  double angle_to_goal = atan2(goal.y - start.y, goal.x - start.x);
+  double angle_to_goal = atan2(goal.y - plan.pose.y, goal.x - plan.pose.x);
 
   // Phase::turn
-  goal1_ = start;
+  goal1_ = plan.pose;
   goal1_.yaw = angle_to_goal;
 
   // Phase::run
@@ -55,7 +55,7 @@ bool SurfaceMission::init(const OrcaPose &start, const OrcaPose &goal)
   // Start Phase::turn
   phase_ = Phase::turn;
   planner_.reset(new RotateMotion);
-  if (!planner_->init(start, goal1_))
+  if (!planner_->init(goal1_, plan))
   {
     ROS_ERROR("Can't init SurfaceMission Phase::turn");
     return false;
@@ -65,7 +65,7 @@ bool SurfaceMission::init(const OrcaPose &start, const OrcaPose &goal)
   return true;
 }
 
-bool SurfaceMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts)
+bool SurfaceMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
   if (phase_ == Phase::no_goal)
   {
@@ -80,7 +80,7 @@ bool SurfaceMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &
       case Phase::turn:
         phase_ = Phase::run;
         planner_.reset(new LineMotion);
-        if (!planner_->init(goal1_, goal2_))
+        if (!planner_->init(goal2_, plan))
         {
           ROS_ERROR("Can't init SurfaceMission Phase::run");
           return false;
@@ -90,7 +90,7 @@ bool SurfaceMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &
       case Phase::run:
         phase_ = Phase::final_turn;
         planner_.reset(new RotateMotion);
-        if (!planner_->init(goal2_, goal3_))
+        if (!planner_->init(goal3_, plan))
         {
           ROS_ERROR("Can't init SurfaceMission Phase::final_turn");
           return false;
@@ -110,62 +110,57 @@ bool SurfaceMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &
 // SquareMission
 //=====================================================================================
 
-constexpr bool is_rotate_phase(int p) { return p % 2 == 0; }
-
-bool SquareMission::init(const OrcaPose &start, const OrcaPose &goal)
+bool SquareMission::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
   constexpr double TARGET_DEPTH = -9;
 
   // Clear previous segments, if any
   segments_.clear();
 
-  // Start
-  segments_.push_back(Segment{Planner::start, start});
-
-  if (std::abs(start.z - TARGET_DEPTH) > EPSILON_PLAN_XYZ)
+  if (std::abs(plan.pose.z - TARGET_DEPTH) > EPSILON_PLAN_XYZ)
   {
     // Descend/ascend to target depth
-    segments_.push_back(Segment{Planner::vertical, OrcaPose(start.x, start.y, TARGET_DEPTH, start.yaw)});
+    segments_.push_back(Segment{Planner::vertical, OrcaPose(plan.pose.x, plan.pose.y, TARGET_DEPTH, plan.pose.yaw)});
   }
 
-  bool north_first = goal.y > start.y;  // North or south first?
-  bool east_first = goal.x > start.x;   // East or west first?
+  bool north_first = goal.y > plan.pose.y;  // North or south first?
+  bool east_first = goal.x > plan.pose.x;   // East or west first?
 
   // First leg
-  segments_.push_back(Segment{Planner::rotate, OrcaPose(start.x, start.y, TARGET_DEPTH, north_first ? M_PI_2 : -M_PI_2)});
-  segments_.push_back(Segment{Planner::line, OrcaPose(start.x, goal.y, TARGET_DEPTH, north_first ? M_PI_2 : -M_PI_2)});
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(plan.pose.x, plan.pose.y, TARGET_DEPTH, north_first ? M_PI_2 : -M_PI_2)});
+  segments_.push_back(Segment{Planner::line, OrcaPose(plan.pose.x, goal.y, TARGET_DEPTH, north_first ? M_PI_2 : -M_PI_2)});
 
   // Second leg
-  segments_.push_back(Segment{Planner::rotate, OrcaPose(start.x, goal.y, TARGET_DEPTH, east_first ? 0 : M_PI)});
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(plan.pose.x, goal.y, TARGET_DEPTH, east_first ? 0 : M_PI)});
   segments_.push_back(Segment{Planner::line, OrcaPose(goal.x, goal.y, TARGET_DEPTH, east_first ? 0 : M_PI)});
 
   // Third leg
   segments_.push_back(Segment{Planner::rotate, OrcaPose(goal.x, goal.y, TARGET_DEPTH, north_first ? -M_PI_2 : M_PI_2)});
-  segments_.push_back(Segment{Planner::line, OrcaPose(goal.x, start.y, TARGET_DEPTH, north_first ? -M_PI_2 : M_PI_2)});
+  segments_.push_back(Segment{Planner::line, OrcaPose(goal.x, plan.pose.y, TARGET_DEPTH, north_first ? -M_PI_2 : M_PI_2)});
 
   // Fourth leg
-  segments_.push_back(Segment{Planner::rotate, OrcaPose(goal.x, start.y, TARGET_DEPTH, east_first ? M_PI : 0)});
-  segments_.push_back(Segment{Planner::line, OrcaPose(start.x, start.y, TARGET_DEPTH, east_first ? M_PI : 0)});
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(goal.x, plan.pose.y, TARGET_DEPTH, east_first ? M_PI : 0)});
+  segments_.push_back(Segment{Planner::line, OrcaPose(plan.pose.x, plan.pose.y, TARGET_DEPTH, east_first ? M_PI : 0)});
 
   // Final turn
-  segments_.push_back(Segment{Planner::rotate, OrcaPose(start.x, start.y, TARGET_DEPTH, goal.yaw)});
+  segments_.push_back(Segment{Planner::rotate, OrcaPose(plan.pose.x, plan.pose.y, TARGET_DEPTH, goal.yaw)});
 
   // Start
-  segment_ = 0;
+  segment_ = -1;
   last_time_ = ros::Time::now();
 
   return true;
 }
 
 // TODO move to base class
-bool SquareMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts)
+bool SquareMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
   BaseMission::advance(curr, plan, efforts);
 
   // Update the plan
   if (!planner_ || !planner_->advance(dt_, curr, plan, efforts))
   {
-    if (++segment_ >= segments_.size()) // Skips segment 0, which is the start segment
+    if (++segment_ >= segments_.size())
     {
       // Mission complete
       return false;
@@ -185,7 +180,7 @@ bool SquareMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &e
           break;
       }
 
-      if (!planner_->init(segments_[segment_ - 1].goal, segments_[segment_].goal))
+      if (!planner_->init(segments_[segment_].goal, plan))
       {
         ROS_ERROR("Can't init SquareMission phase %d", segment_);
         return false;
@@ -200,14 +195,14 @@ bool SquareMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &e
 // ArcMission
 //=====================================================================================
 
-bool ArcMission::init(const OrcaPose &start, const OrcaPose &goal)
+bool ArcMission::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
   // Hold z constant
   OrcaPose goal2 = goal;
-  goal2.z = start.z;
+  goal2.z = plan.pose.z;
 
   planner_.reset(new ArcMotion);
-  if (!planner_->init(start, goal2))
+  if (!planner_->init(goal2, plan))
   {
     ROS_ERROR("Can't init ArcMission");
     return false;
@@ -218,7 +213,7 @@ bool ArcMission::init(const OrcaPose &start, const OrcaPose &goal)
 
 }
 
-bool ArcMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts)
+bool ArcMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
   BaseMission::advance(curr, plan, efforts);
   return planner_->advance(dt_, curr, plan, efforts);
@@ -228,14 +223,14 @@ bool ArcMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &effo
 // VerticalMission
 //=====================================================================================
 
-bool VerticalMission::init(const OrcaPose &start, const OrcaPose &goal)
+bool VerticalMission::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
   // Hold x, y, yaw constant
-  OrcaPose goal2 = start;
+  OrcaPose goal2 = plan.pose;
   goal2.z = goal.z;
 
   planner_.reset(new VerticalMotion);
-  if (!planner_->init(start, goal2))
+  if (!planner_->init(goal2, plan))
   {
     ROS_ERROR("Can't init VerticalMission");
     return false;
@@ -246,7 +241,7 @@ bool VerticalMission::init(const OrcaPose &start, const OrcaPose &goal)
 
 }
 
-bool VerticalMission::advance(const OrcaPose &curr, OrcaPose &plan, OrcaEfforts &efforts)
+bool VerticalMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
   BaseMission::advance(curr, plan, efforts);
   return planner_->advance(dt_, curr, plan, efforts);

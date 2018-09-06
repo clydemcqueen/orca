@@ -38,6 +38,9 @@ add_executable(orca_base src/orca_base.cpp src/orca_motion.cpp src/orca_mission.
 add_dependencies(orca_base ${catkin_EXPORTED_TARGETS})
 target_link_libraries(orca_base ${catkin_LIBRARIES})
 
+## Test
+add_executable(orca_base_test src/test.cpp)
+target_link_libraries(orca_base_test ${catkin_LIBRARIES})
+
 ## Install headers
-install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
+install(DIRECTORY include/${PROJECT_NAME}/ DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})

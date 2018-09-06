@@ -7,6 +7,7 @@
 
   <!-- Orca constants -->
   <xacro:property name="TOTAL_MASS" value="10"/>
+  <xacro:property name="TOTAL_VOLUME" value="0.01"/>
   <xacro:property name="LENGTH" value="0.457"/>
   <xacro:property name="WIDTH" value="0.338"/>
   <xacro:property name="HEIGHT" value="0.254"/>
@@ -21,7 +22,6 @@
   <xacro:property name="THRUSTER_Z" value="-0.009"/>
   <xacro:property name="VERT_THRUSTER_Y" value="0.105"/>
   <xacro:property name="VERT_THRUSTER_Z" value="0.09"/>
-  <xacro:property name="BUOYANCY" value="0.09"/>
   <xacro:property name="MASS_Z" value="0.011"/>
   <xacro:property name="FORWARD_FORCE" value="50"/>
   <xacro:property name="REVERSE_FORCE" value="40"/>
@@ -30,6 +30,7 @@
 
   <!-- Physics properties -->
   <xacro:property name="FLUID_DENSITY" value="1029"/>
+  <xacro:property name="DISPLACED_MASS" value="${TOTAL_VOLUME*FLUID_DENSITY}"/>
 
   <!-- General constants -->
   <xacro:property name="PI" value="3.1415926535897931"/>
@@ -93,7 +94,7 @@
   <link name="base_link">
     <inertial>
       <origin xyz="0 0 ${MASS_Z}"/> <!-- Center of mass -->
-      <mass value="${TOTAL_MASS - BUOYANCY}"/>
+      <mass value="${TOTAL_MASS}"/>
       <inertia ixx="${IXX}" ixy="0.0" ixz="0.0" iyy="${IYY}" iyz="0.0" izz="${IZZ}"/>
     </inertial>
     <visual>
@@ -166,7 +167,7 @@
       <surface>${SURFACE}</surface>
       <link name="base_link">
         <center_of_volume>0 0 0.06</center_of_volume>
-        <volume>${TOTAL_MASS / FLUID_DENSITY}</volume>
+        <volume>${TOTAL_VOLUME}</volume>
       </link>
     </plugin>
   </gazebo>
@@ -246,7 +247,7 @@
   <gazebo reference="base_link">
     <gravity>true</gravity>
     <sensor name="imu_sensor" type="imu">
-      <update_rate>125</update_rate> <!-- Match orca_driver rate -->
+      <update_rate>50</update_rate> <!-- Gazebeo max seems to be 50Hz -->
       <plugin name="OrcaIMUPlugin" filename="libOrcaIMUPlugin.so" />
       <pose>0 0 0 0 0 0</pose>
     </sensor>

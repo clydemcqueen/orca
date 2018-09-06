@@ -97,18 +97,22 @@ public:
     {
       imu_msg_.header.stamp = ros::Time::now();
 
-      // Get raw readings
+      // Get accel and gyro readings in the sensor frame
       ignition::math::Vector3d linear_acceleration = sensor_->LinearAcceleration(true); // True: don't add noise
       ignition::math::Vector3d angular_velocity = sensor_->AngularVelocity(true);       // True: don't add noise
+
+      // Get orientation in the reference frame -- set on boot to the world frame
       ignition::math::Quaterniond orientation = sensor_->Orientation();
 
-      // TODO add gravity to accelerometer
       // TODO turn orientation into a magnetometer reading -- tricky
 
+      // TODO accel noise on z axis is much bigger because gravity dominates the measurement
+      // TODO remove gravity, then add noise, then add gravity back in
+
       // Add our own noise
-      orca_gazebo::AddNoise(ACCEL_STDDEV, linear_acceleration);
-      orca_gazebo::AddNoise(GYRO_STDDEV, angular_velocity);
-      orca_gazebo::AddNoise(ORIENTATION_STDDEV, orientation);
+      orca_gazebo::addNoise(ACCEL_STDDEV, linear_acceleration);
+      orca_gazebo::addNoise(GYRO_STDDEV, angular_velocity);
+      orca_gazebo::addNoise(ORIENTATION_STDDEV, orientation);
 
       // Copy to message
       orca_gazebo::ignition2msg(linear_acceleration, imu_msg_.linear_acceleration);

@@ -57,37 +57,41 @@ double deceleration_distance(const double yaw, double velo_x, double velo_y)
 // BaseMotion
 //=====================================================================================
 
-bool BaseMotion::init(const OrcaPose &start, const OrcaPose &goal)
+bool BaseMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
   // Set goal
   goal_ = goal;
 
   // Init state
-  pose_ = start;
-  velo_ = OrcaPose{};
+  plan.stopMotion();
   ff_ = OrcaPose{};
 
   // Init PID controllers
-  x_controller_.setTarget(start.x);
-  y_controller_.setTarget(start.y);
-  z_controller_.setTarget(start.z);
-  yaw_controller_.setTarget(start.yaw);
+  x_controller_.setTarget(plan.pose.x);
+  y_controller_.setTarget(plan.pose.y);
+  z_controller_.setTarget(plan.pose.z);
+  yaw_controller_.setTarget(plan.pose.yaw);
 
   // Always succeed
   return true;
 }
 
-bool BaseMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts)
+bool BaseMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
-  // Return planned pose
-  plan = pose_;
-
   // u_bar is required acceleration
   OrcaPose u_bar{};
+#if 0
   u_bar.x = x_controller_.calc(curr.x, dt, ff_.x);
   u_bar.y = y_controller_.calc(curr.y, dt, ff_.y);
   u_bar.z = z_controller_.calc(curr.z, dt, ff_.z);
   u_bar.yaw = yaw_controller_.calc(curr.yaw, dt, ff_.yaw);
+#else
+  // TODO temp while debugging -- remove this
+  u_bar.x = ff_.x;
+  u_bar.y = ff_.y;
+  u_bar.z = ff_.z;
+  u_bar.yaw = ff_.yaw;
+#endif
 
   // u_bar (acceleration) => u (control inputs normalized from -1 to 1, aka effort)
   double x_effort = accel_to_effort_xy(u_bar.x);
@@ -99,6 +103,12 @@ bool BaseMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::
   efforts.vertical = -z_effort;
   rotate_frame(x_effort, y_effort, curr.yaw, efforts.forward, efforts.strafe);
 
+  // Update pose covariance
+  for (int i = 0; i < 4; ++i)
+  {
+    plan.pose_covariance[i + 4 * i] += DEF_COVAR * dt;
+  }
+
   // Never stop
   return true;
 }
@@ -107,35 +117,36 @@ bool BaseMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::
 // RotateMotion
 //=====================================================================================
 
-bool RotateMotion::init(const OrcaPose &start, const OrcaPose &goal)
+bool RotateMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
-  BaseMotion::init(start, goal);
+  BaseMotion::init(goal, plan);
 
-  if (start.distance_xy(goal) > EPSILON_PLAN_XYZ || start.distance_z(goal) > EPSILON_PLAN_XYZ)
+  if (plan.pose.distance_xy(goal) > EPSILON_PLAN_XYZ || plan.pose.distance_z(goal) > EPSILON_PLAN_XYZ)
   {
     ROS_ERROR("Can't init rotate motion: x, y and z must be the same");
     return false;
   }
 
   // Pick the shortest direction
-  velo_.yaw = norm_angle(goal.yaw - start.yaw) > 0 ? VELO_YAW : -VELO_YAW;
+  plan.velo.yaw = norm_angle(goal.yaw - plan.pose.yaw) > 0 ? VELO_YAW : -VELO_YAW;
 
   // Drag torque => thrust torque => acceleration => feedforward
-  ff_.yaw = torque_to_accel_yaw(-drag_torque_yaw(velo_.yaw));
+  ff_.yaw = torque_to_accel_yaw(-drag_torque_yaw(plan.velo.yaw));
+  ff_.z = HOVER_ACCEL_Z;
 
-  ROS_DEBUG("Rotate init: start %g, goal %g, velocity %g, accel %g", start.yaw, goal.yaw, velo_.yaw, ff_.yaw);
+  ROS_DEBUG("Rotate init: start %g, goal %g, velocity %g, accel %g", plan.pose.yaw, goal.yaw, plan.velo.yaw, ff_.yaw);
   return true;
 }
 
-bool RotateMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts)
+bool RotateMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
-  if (goal_.distance_yaw(pose_) > EPSILON_PLAN_YAW)
+  if (goal_.distance_yaw(plan.pose) > EPSILON_PLAN_YAW)
   {
     // Update pose
-    pose_.yaw = norm_angle(pose_.yaw + velo_.yaw * dt);
+    plan.pose.yaw = norm_angle(plan.pose.yaw + plan.velo.yaw * dt);
 
     // Set targets
-    yaw_controller_.setTarget(pose_.yaw);
+    yaw_controller_.setTarget(plan.pose.yaw);
 
     // Compute efforts
     BaseMotion::advance(dt, curr, plan, efforts);
@@ -144,7 +155,9 @@ bool RotateMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base
   else
   {
     // We're done
-    plan = goal_;
+    plan.pose = goal_;
+    plan.stopMotion();
+    efforts.clear();
     return false;
   }
 }
@@ -153,32 +166,33 @@ bool RotateMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base
 // LineMotion
 //=====================================================================================
 
-bool LineMotion::init(const OrcaPose &start, const OrcaPose &goal)
+bool LineMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
-  BaseMotion::init(start, goal);
+  BaseMotion::init(goal, plan);
 
-  if (start.distance_z(goal) > EPSILON_PLAN_XYZ || start.distance_yaw(goal) > EPSILON_PLAN_YAW)
+  if (plan.pose.distance_z(goal) > EPSILON_PLAN_XYZ || plan.pose.distance_yaw(goal) > EPSILON_PLAN_YAW)
   {
     ROS_ERROR("Can't init line motion: z and yaw must be the same");
     return false;
   }
 
   // Compute angle start => goal
-  double angle_to_goal = atan2(goal.y - start.y, goal.x - start.x);
+  double angle_to_goal = atan2(goal.y - plan.pose.y, goal.x - plan.pose.x);
 
   // Drag force => thrust force => acceleration => feedforward
   drag_force_to_accel_xy(goal.yaw, VELO_XY * cos(angle_to_goal), VELO_XY * sin(angle_to_goal), ff_.x, ff_.y);
+  ff_.z = HOVER_ACCEL_Z;
 
-  ROS_DEBUG("Line init: start (%g, %g, %g), goal (%g, %g, %g), ff (%g, %g, %g)", start.x, start.y, start.z, goal.x, goal.y, goal.z, ff_.x, ff_.y, ff_.z);
+  ROS_DEBUG("Line init: start (%g, %g, %g), goal (%g, %g, %g), ff (%g, %g, %g)", plan.pose.x, plan.pose.y, plan.pose.z, goal.x, goal.y, goal.z, ff_.x, ff_.y, ff_.z);
   return true;
 }
 
-bool LineMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts)
+bool LineMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
-  double distance_remaining = goal_.distance_xy(pose_);
+  double distance_remaining = goal_.distance_xy(plan.pose);
   if (distance_remaining > EPSILON_PLAN_XYZ)
   {
-    if (distance_remaining - deceleration_distance(goal_.yaw, velo_.x, velo_.y) < EPSILON_PLAN_XYZ)
+    if (distance_remaining - deceleration_distance(goal_.yaw, plan.velo.x, plan.velo.y) < EPSILON_PLAN_XYZ)
     {
       // Decelerate
       ff_.x = ff_.y = 0;
@@ -186,19 +200,19 @@ bool LineMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::
 
     // Compute acceleration due to drag
     double accel_drag_x, accel_drag_y;
-    drag_force_to_accel_xy(goal_.yaw, velo_.x, velo_.y, accel_drag_x, accel_drag_y);
+    drag_force_to_accel_xy(goal_.yaw, plan.velo.x, plan.velo.y, accel_drag_x, accel_drag_y);
 
     // Update velocity
-    velo_.x += (ff_.x - accel_drag_x) * dt;
-    velo_.y += (ff_.y - accel_drag_y) * dt;
+    plan.velo.x += (ff_.x - accel_drag_x) * dt;
+    plan.velo.y += (ff_.y - accel_drag_y) * dt;
 
     // Update pose
-    pose_.x += velo_.x * dt;
-    pose_.y += velo_.y * dt;
+    plan.pose.x += plan.velo.x * dt;
+    plan.pose.y += plan.velo.y * dt;
 
     // Set targets
-    x_controller_.setTarget(pose_.x);
-    y_controller_.setTarget(pose_.y);
+    x_controller_.setTarget(plan.pose.x);
+    y_controller_.setTarget(plan.pose.y);
 
     // Compute efforts
     BaseMotion::advance(dt, curr, plan, efforts);
@@ -206,8 +220,9 @@ bool LineMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::
   }
   else
   {
-    // Close enough, we're done
-    plan = goal_;
+    // We're done
+    plan.pose = goal_;
+    plan.stopMotion();
     efforts.clear();
     return false;
   }
@@ -217,18 +232,18 @@ bool LineMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::
 // ArcMotion
 //=====================================================================================
 
-bool ArcMotion::init(const OrcaPose &start, const OrcaPose &goal)
+bool ArcMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
-  BaseMotion::init(start, goal);
+  BaseMotion::init(goal, plan);
 
-  if (start.distance_z(goal) > EPSILON_PLAN_XYZ)
+  if (plan.pose.distance_z(goal) > EPSILON_PLAN_XYZ)
   {
     ROS_ERROR("Can't init arc motion: z must be the same");
     return false;
   }
 
   // Calc radius
-  arc_.radius_ = std::hypot(goal.x - start.x, goal.y - start.y) / 2;
+  arc_.radius_ = std::hypot(goal.x - plan.pose.x, goal.y - plan.pose.y) / 2;
   if (arc_.radius_ < 1)
   {
     ROS_ERROR("Can't init arc motion: radius is too small");
@@ -236,11 +251,11 @@ bool ArcMotion::init(const OrcaPose &start, const OrcaPose &goal)
   }
 
   // Calc center
-  arc_.center_.x = start.x - sin(start.yaw) * arc_.radius_;
-  arc_.center_.y = start.y + cos(start.yaw) * arc_.radius_;
+  arc_.center_.x = plan.pose.x - sin(plan.pose.yaw) * arc_.radius_;
+  arc_.center_.y = plan.pose.y + cos(plan.pose.yaw) * arc_.radius_;
 
   // Init polar start, goal angles
-  arc_.start_angle_ = norm_angle(start.yaw - M_PI_2);
+  arc_.start_angle_ = norm_angle(plan.pose.yaw - M_PI_2);
   arc_.goal_angle_ = norm_angle(goal.yaw - M_PI_2);
 
   // Init polar pose and velocity
@@ -248,46 +263,47 @@ bool ArcMotion::init(const OrcaPose &start, const OrcaPose &goal)
   polar_velo_ = VELO_XY / arc_.radius_;
 
   // Drag torque => thrust torque => acceleration => feedforward
-  velo_.yaw = polar_velo_;
-  ff_.yaw = torque_to_accel_yaw(-drag_torque_yaw(velo_.yaw));
+  plan.velo.yaw = polar_velo_;
+  ff_.yaw = torque_to_accel_yaw(-drag_torque_yaw(plan.velo.yaw));
+  ff_.z = HOVER_ACCEL_Z;
 
-  ROS_DEBUG("Arc init: center (%g, %g), radius %g, velo yaw %g, ff yaw %g", arc_.center_.x, arc_.center_.y, arc_.radius_, velo_.yaw, ff_.yaw);
+  ROS_DEBUG("Arc init: center (%g, %g), radius %g, velo yaw %g, ff yaw %g", arc_.center_.x, arc_.center_.y, arc_.radius_, plan.velo.yaw, ff_.yaw);
   return true;
 }
 
-bool ArcMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts)
+bool ArcMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
   if (std::abs(norm_angle(arc_.goal_angle_ - polar_pose_)) > EPSILON_PLAN_YAW)
   {
-    OrcaPose previous_pose = pose_;
-    OrcaPose previous_velo = velo_;
+    OrcaPose previous_pose = plan.pose;
+    OrcaPose previous_velo = plan.velo;
 
     // Update pose in polar coordinates
     polar_pose_ += polar_velo_ * dt;
 
     // Convert polar to cartesian
-    arc_.polarToCartesian(polar_pose_, pose_);
+    arc_.polarToCartesian(polar_pose_, plan.pose);
 
     // Planned velocity
-    velo_.x = (pose_.x - previous_pose.x) / dt;
-    velo_.y = (pose_.y - previous_pose.y) / dt;
+    plan.velo.x = (plan.pose.x - previous_pose.x) / dt;
+    plan.velo.y = (plan.pose.y - previous_pose.y) / dt;
 
     // Planned acceleration
-    double accel_x = (velo_.x - previous_velo.x) / dt;
-    double accel_y = (velo_.y - previous_velo.y) / dt;
+    double accel_x = (plan.velo.x - previous_velo.x) / dt;
+    double accel_y = (plan.velo.y - previous_velo.y) / dt;
 
     // Drag force => thrust force => acceleration
     double accel_drag_x, accel_drag_y;
-    drag_force_to_accel_xy(pose_.yaw, velo_.x, velo_.y, accel_drag_x, accel_drag_y);
+    drag_force_to_accel_xy(plan.pose.yaw, plan.velo.x, plan.velo.y, accel_drag_x, accel_drag_y);
 
     // Add both accelerations
     ff_.x = accel_x + accel_drag_x;
     ff_.y = accel_y + accel_drag_y;
 
     // Set targets
-    x_controller_.setTarget(pose_.x);
-    y_controller_.setTarget(pose_.y);
-    yaw_controller_.setTarget(pose_.yaw);
+    x_controller_.setTarget(plan.pose.x);
+    y_controller_.setTarget(plan.pose.y);
+    yaw_controller_.setTarget(plan.pose.yaw);
 
     // Compute efforts
     BaseMotion::advance(dt, curr, plan, efforts);
@@ -295,8 +311,9 @@ bool ArcMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::O
   }
   else
   {
-    // Close enough, we're done
-    plan = goal_;
+    // We're done
+    plan.pose = goal_;
+    plan.stopMotion();
     efforts.clear();
     return false;
   }
@@ -306,40 +323,38 @@ bool ArcMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::O
 // VerticalMotion
 //=====================================================================================
 
-bool VerticalMotion::init(const OrcaPose &start, const OrcaPose &goal)
+bool VerticalMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
 {
-  BaseMotion::init(start, goal);
+  BaseMotion::init(goal, plan);
 
-  if (start.distance_xy(goal) > EPSILON_PLAN_XYZ || start.distance_yaw(goal) > EPSILON_PLAN_YAW || goal.z > 0)
+  if (plan.pose.distance_xy(goal) > EPSILON_PLAN_XYZ || plan.pose.distance_yaw(goal) > EPSILON_PLAN_YAW || goal.z > 0)
   {
     ROS_ERROR("Can't init vertical motion: x, y and yaw must be the same, goal.z must be negative");
     return false;
   }
 
   // Ascend (+) or descend (-)
-  double direction = goal.z > start.z ? 1 : -1;
+  double direction = goal.z > plan.pose.z ? 1 : -1;
 
   // Target velocity
-  velo_.z = direction * VELO_Z;
+  plan.velo.z = direction * VELO_Z;
 
   // Drag force => thrust force => acceleration => feedforward
-  ff_.z = direction * force_to_accel_z(-drag_force_z(VELO_Z));
+  ff_.z = direction * force_to_accel_z(-drag_force_z(VELO_Z)) + HOVER_ACCEL_Z;
 
-  ROS_DEBUG("Vertical init: start %g, goal %g, velocity %g, ff %g", start.z, goal.z, velo_.z, ff_.z);
+  ROS_DEBUG("Vertical init: start %g, goal %g, velocity %g, ff %g", plan.pose.z, goal.z, plan.velo.z, ff_.z);
   return true;
 }
 
-bool VerticalMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_base::OrcaPose &plan, orca_base::OrcaEfforts &efforts)
+bool VerticalMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
 {
-  if (goal_.distance_z(pose_) > EPSILON_PLAN_XYZ)
+  if (goal_.distance_z(plan.pose) > EPSILON_PLAN_XYZ)
   {
     // Update pose
-    pose_.z += velo_.z * dt;
+    plan.pose.z += plan.velo.z * dt;
 
     // Set targets
-    z_controller_.setTarget(pose_.z);
-
-    ROS_DEBUG("Vertical advance: plan %g, curr %g", pose_.z, curr.z);
+    z_controller_.setTarget(plan.pose.z);
 
     // Compute efforts
     BaseMotion::advance(dt, curr, plan, efforts);
@@ -348,7 +363,9 @@ bool VerticalMotion::advance(double dt, const orca_base::OrcaPose &curr, orca_ba
   else
   {
     // We're done
-    plan = goal_;
+    plan.pose = goal_;
+    plan.stopMotion();
+    efforts.clear();
     return false;
   }
 }

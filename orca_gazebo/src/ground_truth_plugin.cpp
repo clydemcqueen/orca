@@ -3,7 +3,7 @@
 #include <gazebo/physics/physics.hh>
 
 #include <ros/ros.h>
-#include <geometry_msgs/PoseStamped.h>
+#include <nav_msgs/Odometry.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_broadcaster.h>
 
@@ -15,13 +15,13 @@
  *    <gazebo>
  *      <plugin name="OrcaGroundTruthPlugin" filename="libOrcaGroundTruthPlugin.so">
  *        <link name="base_link">
- *          <pose_topic>/ground_truth</pose_topic>
+ *          <odom_topic>/ground_truth</odom_topic>
  *          <surface>10</surface>
  *        </link>
  *      </plugin>
  *    </gazebo>
  *
- *    <pose_topic> Topic for geometry_msgs/PoseStamped messages. Default is /ground_truth.
+ *    <odom_topic> Topic for nav_msgs/Odometry messages. Default is /ground_truth.
  *    <surface> How far above z=0 the surface of the water is; used to calculate depth. Default is 20.
  */
 
@@ -57,13 +57,13 @@ public:
     nh_.reset(new ros::NodeHandle("ground_truth_plugin"));
 
     std::string link_name = "base_link";
-    std::string pose_topic = "/ground_truth";
+    std::string odom_topic = "/ground_truth";
 
     std::cout << std::endl;
     std::cout << "ORCA GROUND TRUTH PLUGIN PARAMETERS" << std::endl;
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << "Default link name: " << link_name << std::endl;
-    std::cout << "Default pose topic: " << pose_topic << std::endl;
+    std::cout << "Default odom topic: " << odom_topic << std::endl;
     std::cout << "Default surface: " << surface_ << std::endl;
 
     if (sdf->HasElement("link"))
@@ -77,10 +77,10 @@ public:
       }
     }
 
-    if (sdf->HasElement("pose_topic"))
+    if (sdf->HasElement("odom_topic"))
     {
-      pose_topic = sdf->GetElement("pose_topic")->Get<std::string>();
-      std::cout << "Pose topic: " << pose_topic << std::endl;
+      odom_topic = sdf->GetElement("odom_topic")->Get<std::string>();
+      std::cout << "Pose topic: " << odom_topic << std::endl;
     }
 
     if (sdf->HasElement("surface"))
@@ -93,7 +93,7 @@ public:
     GZ_ASSERT(base_link_ != nullptr, "Missing link");
 
     // Set up ROS publisher
-    ground_truth_pub_ = nh_->advertise<geometry_msgs::PoseStamped>(pose_topic, 1);
+    ground_truth_pub_ = nh_->advertise<nav_msgs::Odometry>(odom_topic, 1);
 
     // Create timer
     timer_ = nh_->createTimer(ros::Duration(0.1), &OrcaGroundTruthPlugin::TimerCallback, this); // TODO spin rate should be a parameter
@@ -105,18 +105,30 @@ public:
   // Called by the ROS timer.
   void TimerCallback(const ros::TimerEvent &event)
   {
+    // Pose in world frame
     gazebo::math::Pose pose = base_link_->GetWorldPose();
 
-    geometry_msgs::PoseStamped msg;
+    // Linear velo in world frame
+    gazebo::math::Vector3 linear_vel = base_link_->GetWorldLinearVel();
+
+    // TODO get angular velo in odom frame
+
+    // TODO set covar (very small, and fixed)
+
+    nav_msgs::Odometry msg;
     msg.header.frame_id = "odom";
     msg.header.stamp = event.current_real;
-    msg.pose.position.x = pose.pos.x;
-    msg.pose.position.y = pose.pos.y;
-    msg.pose.position.z = pose.pos.z - surface_;
-    msg.pose.orientation.x = pose.rot.x;
-    msg.pose.orientation.y = pose.rot.y;
-    msg.pose.orientation.z = pose.rot.z;
-    msg.pose.orientation.w = pose.rot.w;
+    msg.child_frame_id = "base_link"; // TODO child frame id should be a parameter
+    msg.pose.pose.position.x = pose.pos.x;
+    msg.pose.pose.position.y = pose.pos.y;
+    msg.pose.pose.position.z = pose.pos.z - surface_;
+    msg.pose.pose.orientation.x = pose.rot.x;
+    msg.pose.pose.orientation.y = pose.rot.y;
+    msg.pose.pose.orientation.z = pose.rot.z;
+    msg.pose.pose.orientation.w = pose.rot.w;
+    msg.twist.twist.linear.x = linear_vel.x;
+    msg.twist.twist.linear.y = linear_vel.y;
+    msg.twist.twist.linear.z = linear_vel.z;
 
     ground_truth_pub_.publish(msg);
   }

@@ -105,7 +105,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   battery_sub_ = nh_priv_.subscribe<orca_msgs::Battery>("/orca_driver/battery", 10, &OrcaBase::batteryCallback, this);
   goal_sub_ = nh_priv_.subscribe<geometry_msgs::PoseStamped>("/move_base_simple/goal", 10, &OrcaBase::goalCallback, this);
   gps_sub_ = nh_priv_.subscribe<geometry_msgs::PoseWithCovarianceStamped>("/gps", 10, &OrcaBase::gpsCallback, this);
-  ground_truth_sub_ = nh_priv_.subscribe<geometry_msgs::PoseStamped>("/ground_truth", 10, &OrcaBase::groundTruthCallback, this);
+  ground_truth_sub_ = nh_priv_.subscribe<nav_msgs::Odometry>("/ground_truth", 10, &OrcaBase::groundTruthCallback, this);
   imu_sub_ = nh_priv_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_priv_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
   leak_sub_ = nh_priv_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaBase::leakCallback, this);
@@ -151,19 +151,25 @@ void OrcaBase::batteryCallback(const orca_msgs::Battery::ConstPtr& battery_msg)
 // New 2D goal
 void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 {
+  // TODO move some of this logic to setMode
   if (mode_ != orca_msgs::Control::disarmed && barometer_ready_ && imu_ready_)
   {
+    // Start plan at current estimate
+    odom_plan_.pose = odom_local_;
+    odom_plan_.stopMotion();
+
     // Pull out yaw (kinda cumbersome)
     tf2::Quaternion goal_orientation;
     tf2::fromMsg(msg->pose.orientation, goal_orientation);
     double roll, pitch, goal_yaw;
     tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, goal_yaw);
 
-    OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, odom_local_.z, goal_yaw);
-    ROS_INFO("Start mission at (%g, %g, %g), goal is (%g, %g, %g), heading %g", odom_plan_.x, odom_plan_.y, odom_plan_.z, goal_pose.x, goal_pose.y, goal_pose.z, goal_pose.yaw);
-    mission_.reset(new SquareMission());
+    OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, odom_plan_.pose.z, goal_yaw);
 
-    if (mission_->init(odom_plan_, goal_pose))
+    ROS_INFO("Start mission at (%g, %g, %g), goal is (%g, %g, %g), heading %g", odom_plan_.pose.x, odom_plan_.pose.y, odom_plan_.pose.z, goal_pose.x, goal_pose.y, goal_pose.z, goal_pose.yaw);
+
+    mission_.reset(new SquareMission());
+    if (mission_->init(goal_pose, odom_plan_))
     {
       mission_plan_path_.header.stamp = ros::Time::now();
       mission_plan_path_.header.frame_id = "odom";
@@ -201,7 +207,7 @@ void OrcaBase::gpsCallback(const geometry_msgs::PoseWithCovarianceStamped::Const
 }
 
 // New ground truth message
-void OrcaBase::groundTruthCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
+void OrcaBase::groundTruthCallback(const nav_msgs::Odometry::ConstPtr &msg)
 {
   if (!ground_truth_ready_)
   {
@@ -269,22 +275,13 @@ void OrcaBase::odomLocalCallback(const nav_msgs::Odometry::ConstPtr& msg)
 
 void OrcaBase::publishOdom()
 {
-  // TODO pull everything (including time) from motion planner; this is effectively the "keep station" planner
-
   nav_msgs::Odometry odom_msg;
-  odom_msg.header.stamp = ros::Time::now();
+
+  odom_msg.header.stamp = ros::Time::now(); // TODO motion time
   odom_msg.header.frame_id = "odom";
+  odom_msg.child_frame_id = "base_link";
 
-  odom_plan_.toMsg(odom_msg.pose.pose);
-
-  odom_msg.twist.twist.linear = geometry_msgs::Vector3();
-  odom_msg.twist.twist.angular = geometry_msgs::Vector3();
-
-  for (int i = 0; i < 6; ++i)
-  {
-    odom_msg.pose.covariance[i * 6 + i] = 0.01;
-    odom_msg.twist.covariance[i * 6 + i] = 0.01;
-  }
+  odom_plan_.toMsg(odom_msg);
 
   odom_plan_pub_.publish(odom_msg);
 }
@@ -358,7 +355,7 @@ void OrcaBase::setMode(uint8_t new_mode)
 
   if (auvOperation() && rovMode(new_mode))
   {
-    // AUV to ROV transition, start the communication clock
+    // AUV to ROV transition
     ping_time_ = ros::Time::now();
   }
 
@@ -595,7 +592,7 @@ void OrcaBase::spinOnce()
 
     if (mission_->advance(odom_local_, odom_plan_, efforts_))
     {
-      BaseMission::addToPath(mission_plan_path_, odom_plan_);
+      BaseMission::addToPath(mission_plan_path_, odom_plan_.pose);
       mission_plan_pub_.publish(mission_plan_path_);
 
       // TODO deadband?
