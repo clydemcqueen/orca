@@ -12,6 +12,7 @@
  *        <link name="base_link">
  *          <volume>0.01</volume>
  *          <center_of_volume>0 0 0.06</center_of_volume>
+ *          <height>0.254</height>
  *        </link>
  *      </plugin>
  *    </gazebo>
@@ -20,10 +21,13 @@
  *    <surface> How far above z=0 the surface of the water is; buoyancy force stops at the surface.
  *    <center_of_volume> Buoyancy force is applied to the center of volume.
  *    <volume> Total volume in m^3.
+ *    <height> Height of vehicle
  *
  * Limitations:
  *    Only 1 link is supported
  *    Volume and center of volume for the link must be provided (it's not calculated)
+ *    Assume vehicle density is uniform (affects behavior near the surface)
+ *    Ignoring vehicle rotation (affects behavior near the surface)
  */
 
 namespace gazebo {
@@ -40,6 +44,7 @@ private:
   double surface_ {20};                       // Distance to surface
   double volume_ {0.01};                      // base_link_ volume
   math::Vector3 center_of_volume_ {0, 0, 0};  // base_link_ center of volume
+  double height_{0.254};                      // base_link_ height
 
 public:
 
@@ -62,6 +67,7 @@ public:
     std::cout << "Default link name: " << link_name << std::endl;
     std::cout << "Default volume: " << volume_ << std::endl;
     std::cout << "Default center of volume: " << center_of_volume_ << std::endl;
+    std::cout << "Default height: " << height_ << std::endl;
 
     // Get overrides, and print them
     if (sdf->HasElement("fluid_density"))
@@ -97,6 +103,12 @@ public:
         center_of_volume_ = linkElem->GetElement("center_of_volume")->Get<math::Vector3>();
         std::cout << "Center of volume: " << center_of_volume_ << std::endl;
       }
+
+      if (linkElem->HasElement("height"))
+      {
+        height_ = linkElem->GetElement("height")->Get<double>();
+        std::cout << "Height: " << height_ << std::endl;
+      }
     }
 
     // Get base link
@@ -116,12 +128,17 @@ public:
     // Get link pose in the world frame
     gazebo::math::Pose link_frame = base_link_->GetWorldPose();
 
-    // Don't do anything if the link is above the surface
-    // TODO use collision bounding box to reduce force, vs. going to 0
-    if (link_frame.pos.z < surface_)
+    if (link_frame.pos.z < surface_ + height_ / 2)
     {
       // Compute buoyancy force in the world frame
       math::Vector3 buoyancy_world_frame = -fluid_density_ * volume_ * gravity_;
+
+      // Scale buoyancy force near the surface
+      if (link_frame.pos.z > surface_ - height_ / 2)
+      {
+        double scale = (link_frame.pos.z - surface_ - height_ / 2) / -height_;
+        buoyancy_world_frame = buoyancy_world_frame * scale;
+      }
 
       // Rotate buoyancy into the link frame
       math::Vector3 buoyancy_link_frame = link_frame.rot.GetInverse().RotateVector(buoyancy_world_frame);
