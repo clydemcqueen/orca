@@ -119,6 +119,9 @@ struct OrcaPose
 
   constexpr OrcaPose(): x(0), y(0), z(0), yaw(0) {}
   constexpr OrcaPose(double _x, double _y, double _z, double _yaw): x(_x), y(_y), z(_z), yaw(_yaw) {}
+  OrcaPose(const tf2::Vector3 &vector, double _yaw): x(vector.x()), y(vector.y()), z(vector.z()), yaw(_yaw) {}
+
+  void clear() { x = 0; y = 0; z = 0; yaw = 0; }
 
   void toMsg(geometry_msgs::Pose &msg) const
   {
@@ -141,7 +144,7 @@ struct OrcaPose
     // Quaternion to yaw
     tf2::Quaternion q;
     tf2::fromMsg(msg.pose.pose.orientation, q);
-    double roll, pitch;
+    double roll = 0, pitch = 0;
     tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
   }
 
@@ -154,7 +157,7 @@ struct OrcaPose
     // Quaternion to yaw TODO util
     tf2::Quaternion q;
     tf2::fromMsg(msg.pose.orientation, q);
-    double roll, pitch;
+    double roll = 0, pitch = 0;
     tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
   }
 
@@ -255,9 +258,23 @@ struct OrcaEfforts
   double yaw;
 
   OrcaEfforts(): forward(0), strafe(0), vertical(0), yaw(0) {}
-  OrcaEfforts(double _forward, double _strafe, double _depth, double _yaw): forward(_forward), strafe(_strafe), vertical(_depth), yaw(_yaw) {}
 
   void clear() { forward = 0; strafe = 0; vertical = 0; yaw = 0; }
+
+  void fromAcceleration(const OrcaPose &u_bar, const double current_yaw)
+  {
+    // u_bar (acceleration) => u (control inputs normalized from -1 to 1, aka effort)
+    double x_effort = accel_to_effort_xy(u_bar.x);
+    double y_effort = accel_to_effort_xy(u_bar.y);
+    double z_effort = accel_to_effort_z(u_bar.z);
+    yaw = accel_to_effort_yaw(u_bar.yaw);
+
+    // Convert from world frame to body frame
+    vertical = -z_effort;
+    rotate_frame(x_effort, y_effort, current_yaw, forward, strafe);
+  }
+
+  // TODO toAcceleration will convert joystick inputs => acceleration
 };
 
 } // namespace orca_base

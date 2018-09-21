@@ -82,8 +82,6 @@
 
     <param name="use_control" value="false" /> <!-- Don't listen to cmd_vel -->
     <param name="publish_acceleration" value="true" />
-    <param name="debug" value="true" />
-    <param name="debug_out_file" value="/home/clyde/orca_catkin_ws/local_pose_debug_out.txt" />
     <!-- TODO set and tune process_noise_covariance -->
   </node>
 

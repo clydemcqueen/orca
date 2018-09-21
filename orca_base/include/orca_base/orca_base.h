@@ -6,7 +6,7 @@
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Joy.h>
-#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 #include "orca_msgs/Barometer.h"
@@ -56,13 +56,15 @@ private:
   float input_dead_band_;
   double yaw_pid_dead_band_;
   double depth_pid_dead_band_;
-  tf2::Quaternion imu_rotation_;
+  tf2::Matrix3x3 imu_rotation_;
 
   // General state
   bool simulation_;                   // True if we're in a simulation
   ros::Time ping_time_;               // Last time we heard from the topside
   ros::Time prev_loop_time_;          // Last time spinOnce was called
   uint8_t mode_;                      // Operating mode
+
+  // State estimation and planning
   OrcaOdometry odom_plan_;            // Planned state
   OrcaPose odom_local_;               // Estimated state
   OrcaPose odom_ground_truth_;        // Ground truth
@@ -80,7 +82,7 @@ private:
   bool imu_ready_;                    // True if we're receiving IMU messages
 
   // IMU
-  tf2::Quaternion base_orientation_;  // Orientation
+  tf2::Matrix3x3 base_orientation_;   // Orientation
   double stability_;                  // Roll and pitch stability from 1.0 (flat) to 0.0 (90 tilt or worse)
 
   // Yaw controller
@@ -141,7 +143,7 @@ private:
   ros::Publisher odom_plan_pub_;                  // Odometry messages
   ros::Publisher thrust_marker_pub_;              // Visualize thrust in rviz
   ros::Publisher mission_plan_pub_;               // Visualize planned path in rviz
-  ros::Publisher mission_actual_pub_;             // Visualize actual path in rviz
+  ros::Publisher mission_estimated_pub_;          // Visualize estimated path in rviz
   ros::Publisher mission_ground_truth_pub_;       // Visualize ground truth in rviz
 
   // Helpers

@@ -88,17 +88,18 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_priv_.param("simulation", simulation_, true);
   if (simulation_)
   {
+    // The simulated IMU is not rotated
     ROS_INFO("Running in a simulation");
-    imu_rotation_ = tf2::Quaternion::getIdentity();
+    imu_rotation_ = tf2::Matrix3x3::getIdentity();
   }
   else
   {
+    // The actual IMU is rotated
     ROS_INFO("Running in real life");
-    tf2::Quaternion imu_orientation;
+    tf2::Matrix3x3 imu_orientation;
     imu_orientation.setRPY(-M_PI/2, -M_PI/2, 0);
     imu_rotation_ =  imu_orientation.inverse();
   }
-  ROS_INFO("base_orientation = imu_orientation * {%g, %g, %g, %g}", imu_rotation_.x(), imu_rotation_.y(), imu_rotation_.z(), imu_rotation_.w());
 
   // Set up all subscriptions
   baro_sub_ = nh_priv_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
@@ -117,7 +118,7 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   odom_plan_pub_ = nh_priv_.advertise<nav_msgs::Odometry>("/odometry/plan", 1);
   thrust_marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("thrust_markers", 1);
   mission_plan_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_plan", 1);
-  mission_actual_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_actual", 1);
+  mission_estimated_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_estimated", 1);
   mission_ground_truth_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_ground_truth", 1);
 }
 
@@ -161,7 +162,7 @@ void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     // Pull out yaw (kinda cumbersome)
     tf2::Quaternion goal_orientation;
     tf2::fromMsg(msg->pose.orientation, goal_orientation);
-    double roll, pitch, goal_yaw;
+    double roll = 0, pitch = 0, goal_yaw = 0;
     tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, goal_yaw);
 
     OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, odom_plan_.pose.z, goal_yaw);
@@ -221,25 +222,20 @@ void OrcaBase::groundTruthCallback(const nav_msgs::Odometry::ConstPtr &msg)
 // New IMU reading
 void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 {
-  // Compute base_orientation
+  // The IMU was rotated before mounting, so the orientation reading needs to be rotated back.
   tf2::Quaternion imu_orientation;
   tf2::fromMsg(msg->orientation, imu_orientation);
-  if (simulation_)
-  {
-    // Gazebo IMU noise model might result in non-normalized Quaternion
-    imu_orientation = imu_orientation.normalize();
-  }
-  base_orientation_ = imu_orientation * imu_rotation_;
+  base_orientation_ = tf2::Matrix3x3(imu_orientation) * imu_rotation_;
 
-  // Pull out yaw
-  double roll, pitch;
-  tf2::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
+  // Get Euler angles
+  double roll = 0, pitch = 0;
+  base_orientation_.getRPY(roll, pitch, yaw_state_);
 
   // Compute a stability metric, used to throttle the pid controllers
   stability_ = std::min(clamp(std::cos(roll), 0.0, 1.0), clamp(std::cos(pitch), 0.0, 1.0));
 
 #if 0
-  // NWU to ENU
+  // NWU to ENU TODO do we need this?
   yaw_state_ += M_PI_2;
   base_orientation_.setRPY(roll, pitch, yaw_state_);
 #endif
@@ -585,13 +581,17 @@ void OrcaBase::spinOnce()
   if (mode_ == orca_msgs::Control::mission)
   {
     BaseMission::addToPath(mission_estimated_path_, odom_local_);
-    mission_actual_pub_.publish(mission_estimated_path_);
+    mission_estimated_pub_.publish(mission_estimated_path_);
 
     BaseMission::addToPath(mission_ground_truth_path_, odom_ground_truth_);
     mission_ground_truth_pub_.publish(mission_ground_truth_path_);
 
-    if (mission_->advance(odom_local_, odom_plan_, efforts_))
+    OrcaPose u_bar;
+    if (mission_->advance(odom_local_, odom_plan_, u_bar))
     {
+      // u_bar in world frame => normalized efforts in body frame
+      efforts_.fromAcceleration(u_bar, odom_plan_.pose.yaw);
+
       BaseMission::addToPath(mission_plan_path_, odom_plan_.pose);
       mission_plan_pub_.publish(mission_plan_path_);
 

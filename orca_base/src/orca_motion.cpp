@@ -76,10 +76,8 @@ bool BaseMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
   return true;
 }
 
-bool BaseMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool BaseMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
-  // u_bar is required acceleration
-  OrcaPose u_bar{};
 #if 0
   u_bar.x = x_controller_.calc(curr.x, dt, ff_.x);
   u_bar.y = y_controller_.calc(curr.y, dt, ff_.y);
@@ -92,16 +90,6 @@ bool BaseMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, Or
   u_bar.z = ff_.z;
   u_bar.yaw = ff_.yaw;
 #endif
-
-  // u_bar (acceleration) => u (control inputs normalized from -1 to 1, aka effort)
-  double x_effort = accel_to_effort_xy(u_bar.x);
-  double y_effort = accel_to_effort_xy(u_bar.y);
-  double z_effort = accel_to_effort_z(u_bar.z);
-  efforts.yaw = accel_to_effort_yaw(u_bar.yaw);
-
-  // Convert from world frame to body frame
-  efforts.vertical = -z_effort;
-  rotate_frame(x_effort, y_effort, curr.yaw, efforts.forward, efforts.strafe);
 
   // Update pose covariance
   for (int i = 0; i < 4; ++i)
@@ -138,7 +126,7 @@ bool RotateMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
   return true;
 }
 
-bool RotateMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool RotateMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
   if (goal_.distance_yaw(plan.pose) > EPSILON_PLAN_YAW)
   {
@@ -149,7 +137,7 @@ bool RotateMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, 
     yaw_controller_.setTarget(plan.pose.yaw);
 
     // Compute efforts
-    BaseMotion::advance(dt, curr, plan, efforts);
+    BaseMotion::advance(dt, curr, plan, u_bar);
     return true;
   }
   else
@@ -157,7 +145,7 @@ bool RotateMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, 
     // We're done
     plan.pose = goal_;
     plan.stopMotion();
-    efforts.clear();
+    u_bar.clear();
     return false;
   }
 }
@@ -187,7 +175,7 @@ bool LineMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
   return true;
 }
 
-bool LineMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool LineMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
   double distance_remaining = goal_.distance_xy(plan.pose);
   if (distance_remaining > EPSILON_PLAN_XYZ)
@@ -214,8 +202,8 @@ bool LineMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, Or
     x_controller_.setTarget(plan.pose.x);
     y_controller_.setTarget(plan.pose.y);
 
-    // Compute efforts
-    BaseMotion::advance(dt, curr, plan, efforts);
+    // Compute u_bar
+    BaseMotion::advance(dt, curr, plan, u_bar);
     return true;
   }
   else
@@ -223,7 +211,7 @@ bool LineMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, Or
     // We're done
     plan.pose = goal_;
     plan.stopMotion();
-    efforts.clear();
+    u_bar.clear();
     return false;
   }
 }
@@ -271,7 +259,7 @@ bool ArcMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
   return true;
 }
 
-bool ArcMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool ArcMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
   if (std::abs(norm_angle(arc_.goal_angle_ - polar_pose_)) > EPSILON_PLAN_YAW)
   {
@@ -305,8 +293,8 @@ bool ArcMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, Orc
     y_controller_.setTarget(plan.pose.y);
     yaw_controller_.setTarget(plan.pose.yaw);
 
-    // Compute efforts
-    BaseMotion::advance(dt, curr, plan, efforts);
+    // Compute u_bar
+    BaseMotion::advance(dt, curr, plan, u_bar);
     return true;
   }
   else
@@ -314,7 +302,7 @@ bool ArcMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, Orc
     // We're done
     plan.pose = goal_;
     plan.stopMotion();
-    efforts.clear();
+    u_bar.clear();
     return false;
   }
 }
@@ -346,7 +334,7 @@ bool VerticalMotion::init(const OrcaPose &goal, OrcaOdometry &plan)
   return true;
 }
 
-bool VerticalMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool VerticalMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
   if (goal_.distance_z(plan.pose) > EPSILON_PLAN_XYZ)
   {
@@ -356,8 +344,8 @@ bool VerticalMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan
     // Set targets
     z_controller_.setTarget(plan.pose.z);
 
-    // Compute efforts
-    BaseMotion::advance(dt, curr, plan, efforts);
+    // Compute u_bar
+    BaseMotion::advance(dt, curr, plan, u_bar);
     return true;
   }
   else
@@ -365,7 +353,7 @@ bool VerticalMotion::advance(double dt, const OrcaPose &curr, OrcaOdometry &plan
     // We're done
     plan.pose = goal_;
     plan.stopMotion();
-    efforts.clear();
+    u_bar.clear();
     return false;
   }
 }

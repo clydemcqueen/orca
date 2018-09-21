@@ -23,9 +23,9 @@ void BaseMission::addToPath(nav_msgs::Path &path, const std::vector<OrcaPose> &p
   }
 }
 
-bool BaseMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool BaseMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
-  efforts.clear();
+  u_bar.clear();
 
   ros::Time now = ros::Time::now();
   dt_ = (now - last_time_).toSec();
@@ -65,7 +65,7 @@ bool SurfaceMission::init(const OrcaPose &goal, OrcaOdometry &plan)
   return true;
 }
 
-bool SurfaceMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool SurfaceMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
   if (phase_ == Phase::no_goal)
   {
@@ -73,7 +73,7 @@ bool SurfaceMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEffor
   }
 
   // Update the plan
-  if (!planner_->advance(dt_, curr, plan, efforts))
+  if (!planner_->advance(dt_, curr, plan, u_bar))
   {
     switch (phase_)
     {
@@ -153,12 +153,12 @@ bool SquareMission::init(const OrcaPose &goal, OrcaOdometry &plan)
 }
 
 // TODO move to base class
-bool SquareMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool SquareMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
-  BaseMission::advance(curr, plan, efforts);
+  BaseMission::advance(curr, plan, u_bar);
 
   // Update the plan
-  if (!planner_ || !planner_->advance(dt_, curr, plan, efforts))
+  if (!planner_ || !planner_->advance(dt_, curr, plan, u_bar))
   {
     if (++segment_ >= segments_.size())
     {
@@ -213,10 +213,10 @@ bool ArcMission::init(const OrcaPose &goal, OrcaOdometry &plan)
 
 }
 
-bool ArcMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool ArcMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
-  BaseMission::advance(curr, plan, efforts);
-  return planner_->advance(dt_, curr, plan, efforts);
+  BaseMission::advance(curr, plan, u_bar);
+  return planner_->advance(dt_, curr, plan, u_bar);
 }
 
 //=====================================================================================
@@ -241,10 +241,10 @@ bool VerticalMission::init(const OrcaPose &goal, OrcaOdometry &plan)
 
 }
 
-bool VerticalMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts)
+bool VerticalMission::advance(const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar)
 {
-  BaseMission::advance(curr, plan, efforts);
-  return planner_->advance(dt_, curr, plan, efforts);
+  BaseMission::advance(curr, plan, u_bar);
+  return planner_->advance(dt_, curr, plan, u_bar);
 }
 
 } // namespace orca_base

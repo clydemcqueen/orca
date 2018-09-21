@@ -44,7 +44,7 @@ public:
   virtual bool init(const OrcaPose &goal, OrcaOdometry &plan);
 
   // Advance the motion plan, return true to continue, false if we're done
-  virtual bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts);
+  virtual bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar);
 };
 
 //=====================================================================================
@@ -61,7 +61,7 @@ class RotateMotion: public BaseMotion
 public:
 
   bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
-  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
+  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar) override;
 };
 
 //=====================================================================================
@@ -80,7 +80,7 @@ class LineMotion: public BaseMotion
 public:
 
   bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
-  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
+  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar) override;
 };
 
 //=====================================================================================
@@ -141,7 +141,7 @@ private:
 public:
 
   bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
-  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
+  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar) override;
 };
 
 //=====================================================================================
@@ -158,7 +158,7 @@ class VerticalMotion: public BaseMotion
 public:
 
   bool init(const OrcaPose &goal, OrcaOdometry &plan) override;
-  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaEfforts &efforts) override;
+  bool advance(double dt, const OrcaPose &curr, OrcaOdometry &plan, OrcaPose &u_bar) override;
 };
 
 } // namespace orca_base
