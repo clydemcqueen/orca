@@ -72,8 +72,8 @@ private:
   struct Thruster
   {
     // Specified in the SDF, and doesn't change:
-    gazebo::math::Vector3 xyz;
-    gazebo::math::Vector3 rpy;
+    ignition::math::Vector3d xyz;
+    ignition::math::Vector3d rpy;
     double pos_force;
     double neg_force;
 
@@ -161,7 +161,8 @@ public:
         }
       }
 
-      ROS_INFO("Thruster pos %g neg %g xyz {%g, %g, %g} rpy {%g, %g, %g}", t.pos_force, t.neg_force, t.xyz.x, t.xyz.y, t.xyz.z, t.rpy.x, t.rpy.y, t.rpy.z);
+      ROS_INFO("Thruster pos %g neg %g xyz {%g, %g, %g} rpy {%g, %g, %g}",
+        t.pos_force, t.neg_force, t.xyz.X(), t.xyz.Y(), t.xyz.Z(), t.rpy.X(), t.rpy.Y(), t.rpy.Z());
       thrusters_.push_back(t);
     }
 
@@ -185,14 +186,14 @@ public:
     for (Thruster t : thrusters_)
     {
       // Default thruster force points directly up
-      gazebo::math::Vector3 force = {0.0, 0.0, t.effort * (t.effort < 0 ? t.neg_force : t.pos_force)};
+      ignition::math::Vector3d force = {0.0, 0.0, t.effort * (t.effort < 0 ? t.neg_force : t.pos_force)};
 
       // Rotate force into place on the frame
-      gazebo::math::Quaternion q = {t.rpy};
+      ignition::math::Quaternion<double> q{t.rpy};
       force = q.RotateVector(force);
 
       // Match base_link's current pose
-      force = base_link_->GetWorldPose().rot.RotateVector(force);
+      force = base_link_->WorldPose().Rot().RotateVector(force);
 
       // Apply the force to base_link
       base_link_->AddForceAtRelativePosition(force, t.xyz);

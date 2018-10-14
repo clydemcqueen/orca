@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(orca_base)
 
 ## Find catkin and everything we need in ROS
@@ -30,7 +30,9 @@ include_directories(
 )
 
 ## Require C++14
-add_compile_options(-std=c++14)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 ## Avoid warnings when we use visualization_msgs::Marker::DELETE and visualization_msgs::Marker::ADD in a conditional expression
 add_compile_options(-Wno-enum-compare)

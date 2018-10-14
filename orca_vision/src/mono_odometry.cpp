@@ -84,7 +84,7 @@ void findFeatures(cv::Mat &image, std::vector<cv::Point2f> &points, cv::Mat &mas
   g_find++;
 
   // Find Shi-Tomasi features
-  goodFeaturesToTrack(image, points, MAX_FEATURES, 0.01, 10, mask, 3, 3, 0, 0.04);
+  goodFeaturesToTrack(image, points, MAX_FEATURES, 0.01, 10, mask, 3, false, 0.04);
 
   // Compute subpixel locations
   cornerSubPix(image, points, SUB_PIX_WIN_SIZE, cv::Size(-1,-1), TERM_CRIT);

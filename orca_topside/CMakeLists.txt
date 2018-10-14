@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(orca_topside)
 
 ## Find catkin and everything we need in ROS
@@ -23,7 +23,9 @@ catkin_package(
 include_directories(include ${catkin_INCLUDE_DIRS})
 
 ## Require C++14
-add_compile_options(-std=c++14)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_AUTOMOC ON)
 

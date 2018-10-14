@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 cmake_policy(SET CMP0054 OLD) # Gets rid of an annoying warning in CMake 3.5.1, but need to fix one day
 project(orca_gazebo)
 
@@ -36,7 +36,9 @@ include_directories(
 link_directories(${GAZEBO_LIBRARY_DIRS})
 
 ## Require C++14
-add_compile_options(-std=c++14)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(OrcaDragPlugin src/drag_plugin.cpp)
 add_dependencies(OrcaDragPlugin ${catkin_EXPORTED_TARGETS})

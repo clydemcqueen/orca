@@ -120,8 +120,8 @@ public:
   void TimerCallback(const ros::TimerEvent &event)
   {
     // Is the GPS sensor above the water surface?
-    gazebo::math::Vector3 pos = base_link_->GetWorldPose().pos;
-    if (pos.z + mast_height_ > surface_)
+    ignition::math::Vector3d pos = base_link_->WorldPose().Pos();
+    if (pos.Z() + mast_height_ > surface_)
     {
       // Do we have a satellite fix? Assume it takes 5 seconds
       if (time_above_surface_ > 5)
@@ -130,9 +130,9 @@ public:
         geometry_msgs::PoseWithCovarianceStamped msg;
         msg.header.frame_id = "odom";
         msg.header.stamp = event.current_real;
-        msg.pose.pose.position.x = orca_gazebo::gaussianKernel(pos.x, GPS_STDDEV);
-        msg.pose.pose.position.y = orca_gazebo::gaussianKernel(pos.y, GPS_STDDEV);
-        msg.pose.pose.position.z = orca_gazebo::gaussianKernel(pos.z - surface_, GPS_STDDEV);
+        msg.pose.pose.position.x = orca_gazebo::gaussianKernel(pos.X(), GPS_STDDEV);
+        msg.pose.pose.position.y = orca_gazebo::gaussianKernel(pos.Y(), GPS_STDDEV);
+        msg.pose.pose.position.z = orca_gazebo::gaussianKernel(pos.Z() - surface_, GPS_STDDEV);
         msg.pose.covariance[0] = GPS_STDDEV * GPS_STDDEV;
         msg.pose.covariance[7] = GPS_STDDEV * GPS_STDDEV;
         gps_pub_.publish(msg);

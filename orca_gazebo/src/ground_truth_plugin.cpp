@@ -106,10 +106,10 @@ public:
   void TimerCallback(const ros::TimerEvent &event)
   {
     // Pose in world frame
-    gazebo::math::Pose pose = base_link_->GetWorldPose();
+    ignition::math::Pose3d pose = base_link_->WorldPose();
 
     // Linear velo in world frame
-    gazebo::math::Vector3 linear_vel = base_link_->GetWorldLinearVel();
+    ignition::math::Vector3d linear_vel = base_link_->WorldLinearVel();
 
     // TODO get angular velo in odom frame
 
@@ -119,16 +119,16 @@ public:
     msg.header.frame_id = "odom";
     msg.header.stamp = event.current_real;
     msg.child_frame_id = "base_link"; // TODO child frame id should be a parameter
-    msg.pose.pose.position.x = pose.pos.x;
-    msg.pose.pose.position.y = pose.pos.y;
-    msg.pose.pose.position.z = pose.pos.z - surface_;
-    msg.pose.pose.orientation.x = pose.rot.x;
-    msg.pose.pose.orientation.y = pose.rot.y;
-    msg.pose.pose.orientation.z = pose.rot.z;
-    msg.pose.pose.orientation.w = pose.rot.w;
-    msg.twist.twist.linear.x = linear_vel.x;
-    msg.twist.twist.linear.y = linear_vel.y;
-    msg.twist.twist.linear.z = linear_vel.z;
+    msg.pose.pose.position.x = pose.Pos().X();
+    msg.pose.pose.position.y = pose.Pos().Y();;
+    msg.pose.pose.position.z = pose.Pos().Z() - surface_;
+    msg.pose.pose.orientation.x = pose.Rot().X();
+    msg.pose.pose.orientation.y = pose.Rot().Y();
+    msg.pose.pose.orientation.z = pose.Rot().Z();
+    msg.pose.pose.orientation.w = pose.Rot().W();
+    msg.twist.twist.linear.x = linear_vel.X();
+    msg.twist.twist.linear.y = linear_vel.Y();
+    msg.twist.twist.linear.z = linear_vel.Z();
 
     ground_truth_pub_.publish(msg);
   }

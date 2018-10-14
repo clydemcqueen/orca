@@ -36,15 +36,15 @@ class OrcaBuoyancyPlugin : public ModelPlugin
 {
 private:
 
-  event::ConnectionPtr update_connection_;    // Connection to update event
-  math::Vector3 gravity_;                     // Gravity vector in world frame
-  physics::LinkPtr base_link_;                // Pointer to the base link
+  event::ConnectionPtr update_connection_;                // Connection to update event
+  ignition::math::Vector3d gravity_;                      // Gravity vector in world frame
+  physics::LinkPtr base_link_;                            // Pointer to the base link
 
-  double fluid_density_ {1029};               // Fluid density of seawater
-  double surface_ {20};                       // Distance to surface
-  double volume_ {0.01};                      // base_link_ volume
-  math::Vector3 center_of_volume_ {0, 0, 0};  // base_link_ center of volume
-  double height_{0.254};                      // base_link_ height
+  double fluid_density_ {1029};                           // Fluid density of seawater
+  double surface_ {20};                                   // Distance to surface
+  double volume_ {0.01};                                  // base_link_ volume
+  ignition::math::Vector3d center_of_volume_ {0, 0, 0};   // base_link_ center of volume
+  double height_{0.254};                                  // base_link_ height
 
 public:
 
@@ -55,7 +55,7 @@ public:
     GZ_ASSERT(sdf != nullptr, "SDF is null");
 
     // Get gravity vector
-    gravity_ = model->GetWorld()->GetPhysicsEngine()->GetGravity();
+    gravity_ = model->GetWorld()->Gravity();
 
     // Print defaults
     std::string link_name {"base_link"};
@@ -100,7 +100,7 @@ public:
 
       if (linkElem->HasElement("center_of_volume"))
       {
-        center_of_volume_ = linkElem->GetElement("center_of_volume")->Get<math::Vector3>();
+        center_of_volume_ = linkElem->GetElement("center_of_volume")->Get<ignition::math::Vector3d>();
         std::cout << "Center of volume: " << center_of_volume_ << std::endl;
       }
 
@@ -126,22 +126,22 @@ public:
   void OnUpdate(const common::UpdateInfo& /*info*/)
   {
     // Get link pose in the world frame
-    gazebo::math::Pose link_frame = base_link_->GetWorldPose();
+    ignition::math::Pose3d link_frame = base_link_->WorldPose();
 
-    if (link_frame.pos.z < surface_ + height_ / 2)
+    if (link_frame.Pos().Z() < surface_ + height_ / 2)
     {
       // Compute buoyancy force in the world frame
-      math::Vector3 buoyancy_world_frame = -fluid_density_ * volume_ * gravity_;
+      ignition::math::Vector3d buoyancy_world_frame = -fluid_density_ * volume_ * gravity_;
 
       // Scale buoyancy force near the surface
-      if (link_frame.pos.z > surface_ - height_ / 2)
+      if (link_frame.Pos().Z() > surface_ - height_ / 2)
       {
-        double scale = (link_frame.pos.z - surface_ - height_ / 2) / -height_;
+        double scale = (link_frame.Pos().Z() - surface_ - height_ / 2) / -height_;
         buoyancy_world_frame = buoyancy_world_frame * scale;
       }
 
       // Rotate buoyancy into the link frame
-      math::Vector3 buoyancy_link_frame = link_frame.rot.GetInverse().RotateVector(buoyancy_world_frame);
+      ignition::math::Vector3d buoyancy_link_frame = link_frame.Rot().Inverse().RotateVector(buoyancy_world_frame);
 
       // Add the buoyancy force
       base_link_->AddLinkForce(buoyancy_link_frame, center_of_volume_);

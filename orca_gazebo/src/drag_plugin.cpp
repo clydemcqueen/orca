@@ -70,14 +70,14 @@ private:
   physics::LinkPtr base_link_;
 
   // Drag force will be applied to the center_of_mass_ (body frame)
-  math::Vector3 center_of_mass_ {0, 0, 0};
+  ignition::math::Vector3d center_of_mass_ {0, 0, 0};
 
   // Tether drag will be applied to the tether attachment point (body frame)
-  math::Vector3 tether_attach_ {0, 0, 0};
+  ignition::math::Vector3d tether_attach_ {0, 0, 0};
 
   // Drag constants (body frame)
-  math::Vector3 linear_drag_ {ROV_LINEAR_DRAG_X, ROV_LINEAR_DRAG_Y, ROV_LINEAR_DRAG_Z};
-  math::Vector3 angular_drag_ {ANGULAR_DRAG_X, ANGULAR_DRAG_Y, ANGULAR_DRAG_Z};
+  ignition::math::Vector3d linear_drag_ {ROV_LINEAR_DRAG_X, ROV_LINEAR_DRAG_Y, ROV_LINEAR_DRAG_Z};
+  ignition::math::Vector3d angular_drag_ {ANGULAR_DRAG_X, ANGULAR_DRAG_Y, ANGULAR_DRAG_Z};
   double tether_drag_ {TETHER_DRAG};
 
   // Distance to surface
@@ -118,25 +118,25 @@ public:
 
       if (linkElem->HasElement("center_of_mass"))
       {
-        center_of_mass_ = linkElem->GetElement("center_of_mass")->Get<math::Vector3>();
+        center_of_mass_ = linkElem->GetElement("center_of_mass")->Get<ignition::math::Vector3d>();
         std::cout << "Center of mass: " << center_of_mass_ << std::endl;
       }
 
       if (linkElem->HasElement("tether_attach"))
       {
-        tether_attach_ = linkElem->GetElement("tether_attach")->Get<math::Vector3>();
+        tether_attach_ = linkElem->GetElement("tether_attach")->Get<ignition::math::Vector3d>();
         std::cout << "Tether attachment point: " << tether_attach_ << std::endl;
       }
 
       if (linkElem->HasElement("linear_drag"))
       {
-        linear_drag_ = linkElem->GetElement("linear_drag")->Get<math::Vector3>();
+        linear_drag_ = linkElem->GetElement("linear_drag")->Get<ignition::math::Vector3d>();
         std::cout << "Linear drag: " << linear_drag_ << std::endl;
       }
 
       if (linkElem->HasElement("angular_drag"))
       {
-        angular_drag_ = linkElem->GetElement("angular_drag")->Get<math::Vector3>();
+        angular_drag_ = linkElem->GetElement("angular_drag")->Get<ignition::math::Vector3d>();
         std::cout << "Angular drag: " << angular_drag_ << std::endl;
       }
 
@@ -166,27 +166,27 @@ public:
   // Called by the world update start event, up to 1000 times per second.
   void OnUpdate(const common::UpdateInfo& /*info*/)
   {
-    math::Vector3 linear_velocity = base_link_->GetRelativeLinearVel();
-    math::Vector3 angular_velocity = base_link_->GetRelativeAngularVel();
+    ignition::math::Vector3d linear_velocity = base_link_->RelativeLinearVel();
+    ignition::math::Vector3d angular_velocity = base_link_->RelativeAngularVel();
 
-    math::Vector3 drag_force;
-    drag_force.x = linear_velocity.x * fabs(linear_velocity.x) * -linear_drag_.x;
-    drag_force.y = linear_velocity.y * fabs(linear_velocity.y) * -linear_drag_.y;
-    drag_force.z = linear_velocity.z * fabs(linear_velocity.z) * -linear_drag_.z;
+    ignition::math::Vector3d drag_force;
+    drag_force.X() = linear_velocity.X() * fabs(linear_velocity.X()) * -linear_drag_.X();
+    drag_force.Y() = linear_velocity.Y() * fabs(linear_velocity.Y()) * -linear_drag_.Y();
+    drag_force.Z() = linear_velocity.Z() * fabs(linear_velocity.Z()) * -linear_drag_.Z();
     base_link_->AddLinkForce(drag_force, center_of_mass_);
 
-    math::Vector3 drag_torque;
-    drag_torque.x = angular_velocity.x * fabs(angular_velocity.x) * -angular_drag_.x;
-    drag_torque.y = angular_velocity.y * fabs(angular_velocity.y) * -angular_drag_.y;
-    drag_torque.z = angular_velocity.z * fabs(angular_velocity.z) * -angular_drag_.z;
+    ignition::math::Vector3d drag_torque;
+    drag_torque.X() = angular_velocity.X() * fabs(angular_velocity.X()) * -angular_drag_.X();
+    drag_torque.Y() = angular_velocity.Y() * fabs(angular_velocity.Y()) * -angular_drag_.Y();
+    drag_torque.Z() = angular_velocity.Z() * fabs(angular_velocity.Z()) * -angular_drag_.Z();
     base_link_->AddRelativeTorque(drag_torque); // ODE adds torque at the center of mass
 
     // Tether drag only accounts for motion in x (forward/reverse)
-    math::Vector3 tether_force;
-    double depth = surface_ - base_link_->GetWorldPose().pos.z;
-    tether_force.x = linear_velocity.x * fabs(linear_velocity.x) * depth * -tether_drag_;
-    tether_force.y = 0;
-    tether_force.z = 0;
+    ignition::math::Vector3d tether_force;
+    double depth = surface_ - base_link_->WorldPose().Pos().Z();
+    tether_force.X() = linear_velocity.X() * fabs(linear_velocity.X()) * depth * -tether_drag_;
+    tether_force.Y() = 0;
+    tether_force.Z() = 0;
     base_link_->AddLinkForce(tether_force, tether_attach_);
   }
 };
