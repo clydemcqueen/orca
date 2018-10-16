@@ -1,0 +1,43 @@
+<launch>
+
+  <!-- Record left and right camera images for later processing -->
+
+  <arg name="unqual_manager_name" default="pipeline" />
+  <arg name="manager_name" default="/$(arg unqual_manager_name)" />
+  <arg name="output_prefix" default="/home/clyde/orca_catkin_ws/bags/lr2" />
+
+  <!-- Filepath for the test rig description file -->
+  <arg name="model" default="$(find orca_vision)/urdf/stereo_test_rig.urdf.xacro" />
+
+  <!-- Open the URDF, run the xacro preprocessor, and stuff the result into 'robot_description' on the parameter server -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(arg model)" />
+
+  <!-- Robot state publisher -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="log" />
+
+  <!-- Nodelet manager -->
+  <node pkg="nodelet" type="nodelet" name="$(arg unqual_manager_name)" args="manager"/>
+
+  <!-- Push all nodelets into /stereo -->
+  <group ns="stereo">
+
+    <!-- Push left camera nodelets into /stereo/left -->
+    <include file="$(find orca_vision)/launch/mono.launch" ns="left">
+      <arg name="manager_name" value="$(arg manager_name)" />
+      <arg name="prefix" value="left" />
+      <arg name="port" value="9001" />
+    </include>
+
+    <!-- Push right camera nodelets into /stereo/right -->
+    <include file="$(find orca_vision)/launch/mono.launch" ns="right">
+      <arg name="manager_name" value="$(arg manager_name)" />
+      <arg name="prefix" value="right" />
+      <arg name="port" value="9002" />
+    </include>
+
+  </group>
+
+  <!-- Record -->
+  <node pkg="rosbag" type="record" name="record_cameras" args="record -o $(arg output_prefix) /stereo/left/image_rect /stereo/left/camera_info /stereo/right/image_rect /stereo/right/camera_info" />
+
+</launch>

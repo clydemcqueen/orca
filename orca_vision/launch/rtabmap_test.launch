@@ -1,0 +1,120 @@
+<launch>
+
+  <!--
+    Test rtabmap stereo odometry
+
+    Run with live cameras: roslaunch orca_vision rtabmap_test.launch
+    Run with a rosbag: roslaunch orca_vision rtabmap_test.launch include_cameras:=false
+  -->
+
+  <arg name="include_cameras" default="true" />         <!-- True if we include camera launch files -->
+
+  <arg name="unqual_manager_name" default="pipeline" />
+  <arg name="manager_name" default="/$(arg unqual_manager_name)" />
+
+  <arg name="approximate_sync" default="true" />        <!-- Run approx sync algorithm to sync L and R cameras -->
+  <arg name="queue_size" default="30" />                <!-- Provide a big enough buffer for approx sync to work -->
+
+  <arg name="frame_id" default="base_link" />
+  <arg name="odom_frame_id" default="odom" />
+
+  <!-- Filepath for the test rig description file -->
+  <arg name="model" default="$(find orca_vision)/urdf/stereo_test_rig.urdf.xacro" />
+
+  <!-- Open the URDF, run the xacro preprocessor, and stuff the result into 'robot_description' on the parameter server -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(arg model)" />
+
+  <!-- Robot state publisher -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="log" />
+
+  <!-- Nodelet manager -->
+  <node if="$(arg include_cameras)"  pkg="nodelet" type="nodelet" name="$(arg unqual_manager_name)" args="manager"/>
+
+  <!-- Push camera nodes into /stereo -->
+  <group ns="stereo">
+
+    <!-- Push left camera nodelets into /stereo/left -->
+    <include if="$(arg include_cameras)" file="$(find orca_vision)/launch/mono.launch" ns="left">
+      <arg name="manager_name" value="$(arg manager_name)" />
+      <arg name="prefix" value="left" />
+      <arg name="port" value="9001" />
+    </include>
+
+    <!-- Push right camera nodelets into /stereo/right -->
+    <include if="$(arg include_cameras)" file="$(find orca_vision)/launch/mono.launch" ns="right">
+      <arg name="manager_name" value="$(arg manager_name)" />
+      <arg name="prefix" value="right" />
+      <arg name="port" value="9002" />
+    </include>
+
+    <!-- RTABmap stereo odometry -->
+    <node pkg="rtabmap_ros" type="stereo_odometry" name="stereo_odometry">
+      <param name="frame_id" type="string" value="$(arg frame_id)" />
+      <param name="odom_frame_id" type="string" value="$(arg odom_frame_id)" />
+      <param name="approx_sync" value="$(arg approximate_sync)" />
+      <param name="queue_size" value="$(arg queue_size)" />
+
+      <param name="Odom/Strategy" value="1" />
+
+      <param name="Vis/InlierDistance" type="string" value="0.5" /> <!-- Up from 0.1 -->
+      <param name="Vis/MinInliers" type="string" value="10" />
+      <param name="Vis/RoiRatios" type="string" value="0.03 0.03 0.04 0.04" />
+      <param name="Vis/MaxDepth" type="string" value="10" />
+
+      <remap from="left/image_rect" to="left/image_rect" />
+      <remap from="right/image_rect" to="right/image_rect" />
+      <remap from="left/camera_info" to="left/camera_info" />
+      <remap from="right/camera_info" to="right/camera_info" />
+    </node>
+
+  </group>
+
+  <!-- Push SLAM nodes into /rtabmap -->
+  <group ns="rtabmap">
+
+    <node name="rtabmap" pkg="rtabmap_ros" type="rtabmap" output="screen" args="--delete_db_on_start">
+      <param name="subscribe_stereo" type="bool" value="true"/>
+      <param name="subscribe_depth" type="bool" value="false"/>
+
+      <param name="approx_sync" value="$(arg approximate_sync)" />
+      <param name="queue_size" type="int" value="$(arg queue_size)" />
+
+      <param name="frame_id" type="string" value="$(arg frame_id)" />
+
+      <remap from="left/image_rect" to="/stereo/left/image_rect"/>
+      <remap from="right/image_rect" to="/stereo/right/image_rect"/>
+      <remap from="left/camera_info" to="/stereo/left/camera_info"/>
+      <remap from="right/camera_info" to="/stereo/right/camera_info"/>
+
+      <remap from="odom" to="/stereo/odom"/>
+
+      <!-- RTAB-Map's parameters -->
+      <param name="Rtabmap/TimeThr" type="string" value="700"/>
+      <param name="Rtabmap/DetectionRate" type="string" value="1"/>
+
+      <param name="Vis/MinInliers" type="string" value="10"/>
+      <param name="Vis/InlierDistance" type="string" value="0.5"/> <!-- Up from 0.1 -->
+    </node>
+
+    <!-- RTABmap viz tool, required -->
+    <node pkg="rtabmap_ros" type="rtabmapviz" name="rtabmapviz_slam" args="-d $(find rtabmap_ros)/launch/config/rgbd_gui.ini" required="true" output="screen">
+      <param name="subscribe_stereo" type="bool" value="true"/>
+      <param name="subscribe_odom_info" type="bool" value="true"/>
+
+      <param name="approx_sync" value="$(arg approximate_sync)" />
+      <param name="queue_size" value="$(arg queue_size)" />
+
+      <param name="frame_id" type="string" value="$(arg frame_id)" />
+
+      <remap from="left/image_rect" to="/stereo/left/image_rect"/>
+      <remap from="right/image_rect" to="/stereo/right/image_rect"/>
+      <remap from="left/camera_info" to="/stereo/left/camera_info"/>
+      <remap from="right/camera_info" to="/stereo/right/camera_info"/>
+
+      <remap from="odom_info" to="/stereo/odom_info"/>
+      <remap from="odom" to="/stereo/odom"/>
+    </node>
+
+  </group>
+
+</launch>

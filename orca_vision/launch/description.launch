@@ -1,0 +1,12 @@
+<launch>
+
+  <!-- Filepath for the test rig description file -->
+  <arg name="model" default="$(find orca_vision)/urdf/stereo_test_rig.urdf.xacro" />
+
+  <!-- Open the URDF, run the xacro preprocessor, and stuff the result into 'robot_description' on the parameter server -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(arg model)" />
+
+  <!-- Robot state publisher -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="log" />
+
+</launch>

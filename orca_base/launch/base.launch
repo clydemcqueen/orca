@@ -4,6 +4,7 @@
   <arg name="simulation" default="false" />
   <arg name="launch_complementary_filter" default="true" />
   <arg name="launch_madgwick_filter" default="false" />
+  <arg name="estimate_global_pose" default="true" />
 
   <!-- Load robot description and launch robot and state publishers -->
   <include file="$(find orca_description)/launch/description.launch" />
@@ -21,7 +22,7 @@
     <param name="publish_tf" value="false" /> <!-- Do not publish a transform, orca_base will do that -->
   </node>
 
-  <!-- Or launch madgwick filter (but not both filters) -->
+  <!-- Or launch madgwick filter (but not both complementary and madgwick filters) -->
   <node pkg="imu_filter_madgwick" type="imu_filter_node" name="imu_filter" if="$(arg launch_madgwick_filter)">
     <param name="use_mag" value="true" /> <!-- Use magnetic field data -->
     <param name="use_magnetic_field_msg" value="true" /> <!-- Use the new msg type -->
@@ -29,35 +30,102 @@
     <param name="world_frame" value="nwu" /> <!-- Complementary filter uses NWU, so force Madgwick to as well -->
   </node>
 
-  <!-- Launch the yaw pid controller -->
-  <node name="yaw_pid" pkg="pid" type="controller" output="log">
-    <param name="node_name" value="yaw_pid_node" />
-    <param name="angle_error" value="true" /> <!-- Treat control variable as an angle in radians -->
-    <param name="Kp" value="0.007" />
-    <param name="Ki" value="0.0" />
-    <param name="Kd" value="0.0" />
-    <param name="upper_limit" value="0.1" />
-    <param name="lower_limit" value="-0.1" />
-    <param name="windup_limit" value="0.1" />
-    <remap from="pid_enable" to="/yaw_pid/pid_enable" />
-    <remap from="state" to="/yaw_pid/state" />
-    <remap from="setpoint" to="/yaw_pid/setpoint" />
-    <remap from="control_effort" to="/yaw_pid/control_effort" />
+  <!-- 1st pose estimator UKF: fuse continuous sensors to provide odom => base_link transform for local navigation -->
+  <node pkg="robot_localization" type="ukf_localization_node" name="local_pose_estimator">
+    <remap from="/odometry/filtered" to="/odometry/local"/>
+
+    <param name="frequency" value="10" />
+    <param name="sensor_timeout" value="1" />
+    <param name="two_d_mode" value="false" />
+    <param name="map_frame" value="map" />
+    <param name="odom_frame" value="odom" />
+    <param name="base_link_frame" value="base_link" />
+    <param name="world_frame" value="odom" />
+
+    <!-- Odometry, frame=odom -->
+    <param name="odom0" value="odometry/plan" />
+    <rosparam param="odom0_config">
+      [false, false, false,
+      false, false, false,
+      true, true, true,
+      true, true, true,
+      false, false, false]
+    </rosparam>
+    <param name="odom0_queue_size" value="2" /> <!-- Odometry publishes at 10Hz -->
+    <param name="odom0_differential" value="false" />
+
+    <!-- Barometer, frame=odom -->
+    <param name="pose0" value="depth"/>
+    <rosparam param="pose0_config">
+      [false, false, true,
+      false, false, false,
+      false, false, false,
+      false, false, false,
+      false, false, false]
+    </rosparam>
+    <param name="pose0_queue_size" value="10" /> <!-- Depth sensor publishes at 50Hz -->
+    <param name="pose0_differential" value="false" />
+
+    <!-- IMU, frame=base_link -->
+    <param name="imu0" value="imu/data"/>
+    <rosparam param="imu0_config">
+      [false, false, false,
+      true, true, true,
+      false, false, false,
+      true, true, true,
+      true, true, true]
+    </rosparam>
+    <param name="imu0_queue_size" value="20" /> <!-- IMU publishes at 125Hz -->
+    <param name="imu0_differential" value="false" />
+    <param name="imu0_remove_gravitational_acceleration" value="true" />
+    <param name="gravitational_acceleration" value="9.80665" />
+
+    <param name="use_control" value="false" /> <!-- Don't listen to cmd_vel -->
+    <param name="publish_acceleration" value="true" />
+    <!-- TODO set and tune process_noise_covariance -->
   </node>
 
-  <!-- Launch the depth pid controller -->
-  <node name="depth_pid" pkg="pid" type="controller" output="log">
-    <param name="node_name" value="depth_pid_node"/>
-    <param name="Kp" value="0.1" />
-    <param name="Ki" value="0.0" />
-    <param name="Kd" value="0.05" />
-    <param name="upper_limit" value="0.1" />
-    <param name="lower_limit" value="-0.1" />
-    <param name="windup_limit" value="0.1" />
-    <remap from="pid_enable" to="/depth_pid/pid_enable" />
-    <remap from="state" to="/depth_pid/state" />
-    <remap from="setpoint" to="/depth_pid/setpoint" />
-    <remap from="control_effort" to="/depth_pid/control_effort" />
+  <!-- 2nd pose estimator UKF: fuse GPS to provide the map => odom transform for global navigation -->
+  <node pkg="robot_localization" type="ukf_localization_node" name="global_pose_estimator" if="$(arg estimate_global_pose)">
+    <remap from="/odometry/filtered" to="/odometry/global"/>
+
+    <param name="frequency" value="10" />
+    <param name="sensor_timeout" value="1" />
+    <param name="two_d_mode" value="false" />
+    <param name="map_frame" value="map" />
+    <param name="odom_frame" value="odom" />
+    <param name="base_link_frame" value="base_link" />
+    <param name="world_frame" value="map" />
+
+    <!-- Fused continuous sensors, frame=odom -->
+    <param name="odom0" value="odometry/local"/>
+    <rosparam param="odom0_config">
+      [true, true, true,
+      true, true, true,
+      true, true, true,
+      true, true, true,
+      false, false, false]
+    </rosparam>
+    <param name="odom0_queue_size" value="2" /> <!-- Local UKF publishes at 10Hz -->
+    <param name="odom0_differential" value="false" />
+
+    <!-- GPS, frame=odom, fuse x, y -->
+    <param name="pose0" value="gps"/>
+    <rosparam param="pose0_config">
+      [true, true, true,
+      false, false, false,
+      false, false, false,
+      false, false, false,
+      false, false, false]
+    </rosparam>
+    <param name="pose0_queue_size" value="2" /> <!-- GPS sensor publishes at 1Hz -->
+    <param name="pose0_differential" value="false" />
+
+    <param name="use_control" value="false" /> <!-- Don't listen to cmd_vel -->
+    <!-- TODO set and tune process_noise_covariance -->
   </node>
+
+  <!-- If we're not estimating the global pose, publish a static map => odom transform -->
+  <node pkg="tf" type="static_transform_publisher" name="map_odom_tf" args="0 0 0 0 0 0 map odom 100" unless="$(arg estimate_global_pose)" />
 
 </launch>

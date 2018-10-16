@@ -1,0 +1,9 @@
+[Unit]
+Description=Stereo camera
+
+[Service]
+User=root
+ExecStart=/home/pi/stereo.sh
+
+[Install]
+WantedBy=multi-user.target

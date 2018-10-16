@@ -18,17 +18,17 @@ It does not use the Pixhawk controller that comes with the BlueROV2, and does no
 Orca runs in [Gazebo](http://gazebosim.org/), a SITL (software-in-the-loop) simulator.
 Use the instructions below to install ROS, Gazebo and Orca on your desktop or laptop.
 
-Install [ROS Kinetic](http://wiki.ros.org/Installation/Ubuntu).
-Select `ros-kinetic-desktop-full`; this will install Gazebo 7.0 as well.
+Install [ROS Melodic](http://wiki.ros.org/Installation/Ubuntu).
+Select `ros-melodic-desktop-full`; this will install Gazebo 9 as well.
 
 Install these additional packages:
 ~~~~
-sudo apt install ros-kinetic-pid ros-kinetic-imu-tools libqt5gstreamer-dev
+sudo apt install ros-melodic-imu-tools ros-melodic-robot-localization
 ~~~~
 
 Create a catkin workspace:
 ~~~~
-source /opt/ros/kinetic/setup.bash
+source /opt/ros/melodic/setup.bash
 mkdir -p ~/orca_catkin_ws/src
 cd ~/orca_catkin_ws/
 catkin_make

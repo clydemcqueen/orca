@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 cmake_policy(SET CMP0054 OLD) # Gets rid of an annoying warning in CMake 3.5.1, but need to fix one day
 project(orca_gazebo)
 
@@ -25,22 +25,48 @@ catkin_package(
 )
 
 ## Set up include directories
-include_directories(${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})
+include_directories(
+  include
+  ${Boost_INCLUDE_DIR}
+  ${catkin_INCLUDE_DIRS}
+  ${GAZEBO_INCLUDE_DIRS}
+)
 
 ## Set up link directories
 link_directories(${GAZEBO_LIBRARY_DIRS})
 
 ## Require C++14
-add_compile_options(-std=c++14)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(DragPlugin src/drag_plugin.cpp)
-add_dependencies(DragPlugin ${catkin_EXPORTED_TARGETS})
-target_link_libraries(DragPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+add_library(OrcaDragPlugin src/drag_plugin.cpp)
+add_dependencies(OrcaDragPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaDragPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 
-add_library(ThrusterPlugin src/thruster_plugin.cpp)
-add_dependencies(ThrusterPlugin ${catkin_EXPORTED_TARGETS})
-target_link_libraries(ThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+add_library(OrcaThrusterPlugin src/thruster_plugin.cpp)
+add_dependencies(OrcaThrusterPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaThrusterPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 
-add_library(BarometerPlugin src/barometer_plugin.cpp)
-add_dependencies(BarometerPlugin ${catkin_EXPORTED_TARGETS})
-target_link_libraries(BarometerPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+add_library(OrcaBarometerPlugin src/barometer_plugin.cpp)
+add_dependencies(OrcaBarometerPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaBarometerPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_library(OrcaGPSPlugin src/gps_plugin.cpp)
+add_dependencies(OrcaGPSPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaGPSPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_library(OrcaBuoyancyPlugin src/buoyancy_plugin.cpp)
+add_dependencies(OrcaBuoyancyPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaBuoyancyPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_library(OrcaIMUPlugin src/imu_plugin.cpp)
+add_dependencies(OrcaIMUPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaIMUPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_library(OrcaGroundTruthPlugin src/ground_truth_plugin.cpp)
+add_dependencies(OrcaGroundTruthPlugin ${catkin_EXPORTED_TARGETS})
+target_link_libraries(OrcaGroundTruthPlugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_executable(orca_gazebo_test src/test.cpp)
+target_link_libraries(orca_gazebo_test ${catkin_LIBRARIES})

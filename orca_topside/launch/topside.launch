@@ -4,6 +4,7 @@
   <arg name="simulation" default="false" />
   <arg name="launch_complementary_filter" default="true" />
   <arg name="launch_madgwick_filter" default="false" />
+  <arg name="estimate_global_pose" default="true" />
 
   <!-- Joystick driver -->
   <node name="joystick" pkg="joy" type="joy_node" output="screen" />

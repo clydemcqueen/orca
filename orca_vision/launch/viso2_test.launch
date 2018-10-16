@@ -1,0 +1,58 @@
+<launch>
+
+  <!--
+    Test viso2 stereo odometry
+
+    Run with live cameras: roslaunch orca_vision viso2_test.launch
+    Run with a rosbag: roslaunch orca_vision viso2_test.launch include_cameras:=false
+  -->
+
+  <arg name="include_cameras" default="true" />         <!-- True if we include camera launch files -->
+
+  <arg name="unqual_manager_name" default="pipeline" />
+  <arg name="manager_name" default="/$(arg unqual_manager_name)" />
+
+  <arg name="approximate_sync" default="true" />        <!-- Run approx sync algorithm to sync L and R cameras -->
+  <arg name="queue_size" default="30" />                <!-- Provide a big enough buffer for approx sync to work -->
+
+  <!-- Filepath for the test rig description file -->
+  <arg name="model" default="$(find orca_vision)/urdf/stereo_test_rig.urdf.xacro" />
+
+  <!-- Open the URDF, run the xacro preprocessor, and stuff the result into 'robot_description' on the parameter server -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(arg model)" />
+
+  <!-- Robot state publisher -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="log" />
+
+  <!-- Nodelet manager -->
+  <node pkg="nodelet" type="nodelet" name="$(arg unqual_manager_name)" args="manager"/>
+
+  <!-- Push all nodelets into /stereo -->
+  <group ns="stereo">
+
+    <!-- Push left camera nodelets into /stereo/left -->
+    <include file="$(find orca_vision)/launch/mono.launch" ns="left" if="$(arg include_cameras)">
+      <arg name="manager_name" value="$(arg manager_name)" />
+      <arg name="prefix" value="left" />
+      <arg name="port" value="9001" />
+    </include>
+
+    <!-- Push right camera nodelets into /stereo/right -->
+    <include file="$(find orca_vision)/launch/mono.launch" ns="right" if="$(arg include_cameras)">
+      <arg name="manager_name" value="$(arg manager_name)" />
+      <arg name="prefix" value="right" />
+      <arg name="port" value="9002" />
+    </include>
+
+  </group>
+
+  <node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer">
+    <remap from="stereo" to="stereo" />
+    <remap from="image" to="image_rect" />
+    <param name="approximate_sync" value="$(arg approximate_sync)" />
+    <param name="queue_size" value="$(arg queue_size)" />
+    <param name="ref_frame_change_method" value="2" /> <!-- Keep the current image as long as the # of inliers is high enough -->
+    <param name="ref_frame_inlier_threshold" value="50" /> <!-- Number of inliers we need to keep the same image -->
+  </node>
+
+</launch>

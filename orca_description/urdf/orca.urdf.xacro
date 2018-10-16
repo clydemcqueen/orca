@@ -7,9 +7,13 @@
 
   <!-- Orca constants -->
   <xacro:property name="TOTAL_MASS" value="10"/>
+  <xacro:property name="TOTAL_VOLUME" value="0.01"/>
   <xacro:property name="LENGTH" value="0.457"/>
   <xacro:property name="WIDTH" value="0.338"/>
   <xacro:property name="HEIGHT" value="0.254"/>
+  <xacro:property name="IXX" value="${TOTAL_MASS / 12 * (WIDTH * WIDTH + HEIGHT * HEIGHT)}"/>
+  <xacro:property name="IYY" value="${TOTAL_MASS / 12 * (LENGTH * LENGTH + HEIGHT * HEIGHT)}"/>
+  <xacro:property name="IZZ" value="${TOTAL_MASS / 12 * (LENGTH * LENGTH + WIDTH * WIDTH)}"/>
   <xacro:property name="FLOAT_X" value="0.12"/>
   <xacro:property name="FLOAT_Y" value="0.11"/>
   <xacro:property name="FLOAT_Z" value="0.07"/>
@@ -18,13 +22,15 @@
   <xacro:property name="THRUSTER_Z" value="-0.009"/>
   <xacro:property name="VERT_THRUSTER_Y" value="0.105"/>
   <xacro:property name="VERT_THRUSTER_Z" value="0.09"/>
-  <xacro:property name="BUOYANCY" value="0.09"/>
   <xacro:property name="MASS_Z" value="0.011"/>
-  <xacro:property name="FORWARD_FORCE" value="110"/>
-  <xacro:property name="REVERSE_FORCE" value="88"/>
+  <xacro:property name="FORWARD_FORCE" value="50"/>
+  <xacro:property name="REVERSE_FORCE" value="40"/>
+  <xacro:property name="HAS_TETHER" default="false"/>
+  <xacro:property name="SURFACE" default="10"/>
 
   <!-- Physics properties -->
   <xacro:property name="FLUID_DENSITY" value="1029"/>
+  <xacro:property name="DISPLACED_MASS" value="${TOTAL_VOLUME*FLUID_DENSITY}"/>
 
   <!-- General constants -->
   <xacro:property name="PI" value="3.1415926535897931"/>
@@ -88,8 +94,8 @@
   <link name="base_link">
     <inertial>
       <origin xyz="0 0 ${MASS_Z}"/> <!-- Center of mass -->
-      <mass value="${TOTAL_MASS - BUOYANCY}"/>
-      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+      <mass value="${TOTAL_MASS}"/>
+      <inertia ixx="${IXX}" ixy="0.0" ixz="0.0" iyy="${IYY}" iyz="0.0" izz="${IZZ}"/>
     </inertial>
     <visual>
       <origin xyz="${FLOAT_X} ${FLOAT_Y} ${FLOAT_Z}"/>
@@ -152,39 +158,42 @@
   </xacro:t200>
 
   <!--
-    The BuoyancyPlugin (provided by Gazebo) applies a force that counteracts gravity. Notes:
-    1. there's no concept of a water surface, so positively buoyant objects float up forever
-    2. the force doesn't vary with water depth
+    The OrcaBuoyancyPlugin applies a force that counteracts gravity.
+    Buoyancy force is not applied if the link is above the surface of the water.
   -->
   <gazebo>
-    <plugin name="BuoyancyPlugin" filename="libBuoyancyPlugin.so">
+    <plugin name="OrcaBuoyancyPlugin" filename="libOrcaBuoyancyPlugin.so">
       <fluid_density>${FLUID_DENSITY}</fluid_density>
+      <surface>${SURFACE}</surface>
       <link name="base_link">
         <center_of_volume>0 0 0.06</center_of_volume>
-        <volume>${TOTAL_MASS / FLUID_DENSITY}</volume>
+        <volume>${TOTAL_VOLUME}</volume>
       </link>
     </plugin>
   </gazebo>
 
   <!--
-  The DragPlugin (provided by Orca) applies a drag force proportional to velocity^2.
+  The OrcaDragPlugin applies a drag force proportional to velocity^2.
   -->
   <gazebo>
-    <plugin name="DragPlugin" filename="libDragPlugin.so">
+    <plugin name="OrcaDragPlugin" filename="libOrcaDragPlugin.so">
       <link name="base_link">
         <center_of_mass>0 0 ${MASS_Z}</center_of_mass>
         <tether_attach>-0.25 0 ${THRUSTER_Z}</tether_attach>
-        <surface>10</surface>
+        <xacro:unless value="${HAS_TETHER}">
+          <tether_drag>0</tether_drag>
+        </xacro:unless>
+        <surface>${SURFACE}</surface>
       </link>
     </plugin>
   </gazebo>
 
   <!--
-    The ThrusterPlugin (provided by Orca) turns ROS messages into thrust forces. Each message contains an array of thrust efforts [-1.0, 1.0].
+    The OrcaThrusterPlugin turns ROS messages into thrust forces. Each message contains an array of thrust efforts [-1.0, 1.0].
     The URDF to SDF translation nukes the joints, so we need to copy/paste the joint locations here.
   -->
   <gazebo>
-    <plugin name="ThrusterPlugin" filename="libThrusterPlugin.so">
+    <plugin name="OrcaThrusterPlugin" filename="libOrcaThrusterPlugin.so">
       <ros_topic>/orca_base/control</ros_topic>
       <thruster name="front_right"> <!-- name attributes are ignored; the tag order must match the message array order -->
         <pos_force>${FORWARD_FORCE}</pos_force> <!-- units are N, positive for ccw, negative for cw -->
@@ -220,12 +229,12 @@
   </gazebo>
 
   <!--
-    The BarometerPlugin (provided by Orca, wraps a Gazebo altimeter sensor) simulates a barometer sensor such as the BlueRobotics Bar30.
+    The OrcaBarometerPlugin (wraps a Gazebo altimeter sensor) simulates a barometer sensor such as the BlueRobotics Bar30.
   -->
   <gazebo reference="base_link">
     <sensor name="barometer_sensor" type="altimeter">
-      <update_rate>10</update_rate> <!-- Match orca_driver rate -->
-      <plugin name="BarometerPlugin" filename="libBarometerPlugin.so">
+      <update_rate>50</update_rate> <!-- Match orca_driver rate -->
+      <plugin name="OrcaBarometerPlugin" filename="libOrcaBarometerPlugin.so">
         <ros_topic>/barometer</ros_topic>
         <fluid_density>${FLUID_DENSITY}</fluid_density>
       </plugin>
@@ -233,23 +242,40 @@
   </gazebo>
 
   <!--
-    The GazeboRosImuSensor (provided by ROS, wraps a Gazebo IMU sensor) simulates an IMU sensor such as the Phidgets 1044.
+    The OrcaIMUPlugin (wraps a Gazebo IMU sensor) simulates an IMU sensor such as the Phidgets 1044.
   -->
   <gazebo reference="base_link">
     <gravity>true</gravity>
     <sensor name="imu_sensor" type="imu">
-      <update_rate>125</update_rate> <!-- Match orca_driver rate -->
-      <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
-        <robotNamespace></robotNamespace>
-        <topicName>imu/data</topicName>
-        <updateRateHZ>125.0</updateRateHZ> <!-- Match orca_driver rate -->
-        <gaussianNoise>0.0</gaussianNoise>
-        <xyzOffset>0 0 0</xyzOffset>
-        <rpyOffset>0 0 0</rpyOffset>
-        <frameName>base_link</frameName>
-      </plugin>
+      <update_rate>50</update_rate> <!-- Gazebeo max seems to be 50Hz -->
+      <plugin name="OrcaIMUPlugin" filename="libOrcaIMUPlugin.so" />
       <pose>0 0 0 0 0 0</pose>
     </sensor>
+  </gazebo>
+
+  <!--
+    The OrcaGPSPlugin simulates a GPS receiver attached to an ROV.
+    When it goes underwater, the GPS signal is lost.
+  -->
+  <gazebo>
+    <plugin name="OrcaGPSPlugin" filename="libOrcaGPSPlugin.so">
+      <link name="base_link">
+        <ros_topic>/gps</ros_topic>
+        <mast_height>1</mast_height>
+        <surface>${SURFACE}</surface>
+      </link>
+    </plugin>
+  </gazebo>
+
+  <!--
+    The OrcaGroundTruthPlugin publishes a ground truth pose.
+  -->
+  <gazebo>
+    <plugin name="OrcaGroundTruthPlugin" filename="libOrcaGroundTruthPlugin.so">
+      <link name="base_link" />
+      <ros_topic>/gps</ros_topic>
+      <surface>${SURFACE}</surface>
+    </plugin>
   </gazebo>
 
 </robot>

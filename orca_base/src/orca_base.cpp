@@ -3,6 +3,7 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 #include "orca_base/orca_base.h"
 #include "orca_base/orca_pwm.h"
 
@@ -14,6 +15,10 @@ constexpr double DEPTH_HOLD_MAX = 50;   // Max depth is 100m, but provide a marg
 
 // Message publish rate in Hz
 constexpr int SPIN_RATE = 10;
+
+// Timeouts
+constexpr double COMM_ERROR_TIMEOUT_DISARM = 5; // Disarm if we can't communicate with the topside
+constexpr double COMM_ERROR_TIMEOUT_SOS = 100;  // Panic if it's been too long
 
 struct Thruster
 {
@@ -42,15 +47,14 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   mode_{orca_msgs::Control::disarmed},
   imu_ready_{false},
   barometer_ready_{false},
-  forward_effort_{0},
-  yaw_effort_{0},
-  strafe_effort_{0},
-  vertical_effort_{0},
   tilt_{0},
   tilt_trim_button_previous_{false},
   brightness_{0},
   brightness_trim_button_previous_{false},
-  ping_time_{ros::Time::now()}
+  ping_time_{ros::Time::now()},
+  prev_loop_time_{ros::Time::now()},
+  depth_controller_{false, 0.1, 0, 0.05},
+  yaw_controller_{true, 0.007, 0, 0}
 {
   nh_priv_.param("joy_axis_yaw", joy_axis_yaw_, 0);                      // Left stick left/right; 1.0 is left and -1.0 is right
   nh_priv_.param("joy_axis_forward", joy_axis_forward_, 1);              // Left stick up/down; 1.0 is forward and -1.0 is backward
@@ -84,37 +88,38 @@ OrcaBase::OrcaBase(ros::NodeHandle &nh, ros::NodeHandle &nh_priv, tf2_ros::Trans
   nh_priv_.param("simulation", simulation_, true);
   if (simulation_)
   {
-    imu_rotation_ = tf2::Quaternion::getIdentity();
+    // The simulated IMU is not rotated
+    ROS_INFO("Running in a simulation");
+    imu_rotation_ = tf2::Matrix3x3::getIdentity();
   }
   else
   {
-    tf2::Quaternion imu_orientation;
+    // The actual IMU is rotated
+    ROS_INFO("Running in real life");
+    tf2::Matrix3x3 imu_orientation;
     imu_orientation.setRPY(-M_PI/2, -M_PI/2, 0);
     imu_rotation_ =  imu_orientation.inverse();
   }
 
   // Set up all subscriptions
   baro_sub_ = nh_priv_.subscribe<orca_msgs::Barometer>("/barometer", 10, &OrcaBase::baroCallback, this);
+  battery_sub_ = nh_priv_.subscribe<orca_msgs::Battery>("/orca_driver/battery", 10, &OrcaBase::batteryCallback, this);
+  goal_sub_ = nh_priv_.subscribe<geometry_msgs::PoseStamped>("/move_base_simple/goal", 10, &OrcaBase::goalCallback, this);
+  gps_sub_ = nh_priv_.subscribe<geometry_msgs::PoseWithCovarianceStamped>("/gps", 10, &OrcaBase::gpsCallback, this);
+  ground_truth_sub_ = nh_priv_.subscribe<nav_msgs::Odometry>("/ground_truth", 10, &OrcaBase::groundTruthCallback, this);
   imu_sub_ = nh_priv_.subscribe<sensor_msgs::Imu>("/imu/data", 10, &OrcaBase::imuCallback, this);
   joy_sub_ = nh_priv_.subscribe<sensor_msgs::Joy>("/joy", 10, &OrcaBase::joyCallback, this);
-  yaw_control_effort_sub_ = nh_priv_.subscribe<std_msgs::Float64>("/yaw_pid/control_effort", 10, &OrcaBase::yawControlEffortCallback, this);
-  depth_control_effort_sub_ = nh_priv_.subscribe<std_msgs::Float64>("/depth_pid/control_effort", 10, &OrcaBase::depthControlEffortCallback, this);
+  leak_sub_ = nh_priv_.subscribe<orca_msgs::Leak>("/orca_driver/leak", 10, &OrcaBase::leakCallback, this);
+  odom_local_sub_ = nh_priv_.subscribe<nav_msgs::Odometry>("/odometry/local", 10, &OrcaBase::odomLocalCallback, this);
   ping_sub_ = nh_priv_.subscribe<std_msgs::Empty>("/ping", 10, &OrcaBase::pingCallback, this);
 
   // Advertise all topics that we'll publish on
   control_pub_ = nh_priv_.advertise<orca_msgs::Control>("control", 1);
-  marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("rviz_marker_array", 1);
-  yaw_pid_enable_pub_ = nh_priv_.advertise<std_msgs::Bool>("/yaw_pid/pid_enable", 1);
-  yaw_state_pub_ = nh_priv_.advertise<std_msgs::Float64>("/yaw_pid/state", 1);
-  yaw_setpoint_pub_ = nh_priv_.advertise<std_msgs::Float64>("/yaw_pid/setpoint", 1);
-  depth_pid_enable_pub_ = nh_priv_.advertise<std_msgs::Bool>("/depth_pid/pid_enable", 1);
-  depth_state_pub_ = nh_priv_.advertise<std_msgs::Float64>("/depth_pid/state", 1);
-  depth_setpoint_pub_ = nh_priv_.advertise<std_msgs::Float64>("/depth_pid/setpoint", 1);
-  odom_pub_ = nh_priv_.advertise<nav_msgs::Odometry>("/odom", 1);
-
-  // Disable pid controllers
-  publishYawPidEnable(false);
-  publishDepthPidEnable(false);
+  odom_plan_pub_ = nh_priv_.advertise<nav_msgs::Odometry>("/odometry/plan", 1);
+  thrust_marker_pub_ = nh_priv_.advertise<visualization_msgs::MarkerArray>("thrust_markers", 1);
+  mission_plan_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_plan", 1);
+  mission_estimated_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_estimated", 1);
+  mission_ground_truth_pub_ = nh_priv_.advertise<nav_msgs::Path>("mission_ground_truth", 1);
 }
 
 // New barometer reading
@@ -134,44 +139,106 @@ void OrcaBase::baroCallback(const orca_msgs::Barometer::ConstPtr& baro_msg)
   }
 }
 
-// New imu reading
+// New battery reading
+void OrcaBase::batteryCallback(const orca_msgs::Battery::ConstPtr& battery_msg)
+{
+  if (battery_msg->low_battery)
+  {
+    ROS_ERROR("SOS! Low battery! %g volts", battery_msg->voltage);
+    setMode(orca_msgs::Control::sos);
+  }
+}
+
+// New 2D goal
+void OrcaBase::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
+{
+  // TODO move some of this logic to setMode
+  if (mode_ != orca_msgs::Control::disarmed && barometer_ready_ && imu_ready_)
+  {
+    // Start plan at current estimate
+    odom_plan_.pose = odom_local_;
+    odom_plan_.stopMotion();
+
+    // Pull out yaw (kinda cumbersome)
+    tf2::Quaternion goal_orientation;
+    tf2::fromMsg(msg->pose.orientation, goal_orientation);
+    double roll = 0, pitch = 0, goal_yaw = 0;
+    tf2::Matrix3x3(goal_orientation).getRPY(roll, pitch, goal_yaw);
+
+    OrcaPose goal_pose(msg->pose.position.x, msg->pose.position.y, odom_plan_.pose.z, goal_yaw);
+
+    ROS_INFO("Start mission at (%g, %g, %g), goal is (%g, %g, %g), heading %g", odom_plan_.pose.x, odom_plan_.pose.y, odom_plan_.pose.z, goal_pose.x, goal_pose.y, goal_pose.z, goal_pose.yaw);
+
+    mission_.reset(new SquareMission());
+    if (mission_->init(goal_pose, odom_plan_))
+    {
+      mission_plan_path_.header.stamp = ros::Time::now();
+      mission_plan_path_.header.frame_id = "odom";
+      mission_plan_path_.poses.clear();
+
+      mission_estimated_path_.header.stamp = ros::Time::now();
+      mission_estimated_path_.header.frame_id = "odom";
+      mission_estimated_path_.poses.clear();
+
+      mission_ground_truth_path_.header.stamp = ros::Time::now();
+      mission_ground_truth_path_.header.frame_id = "odom";
+      mission_ground_truth_path_.poses.clear();
+
+      setMode(orca_msgs::Control::mission);
+    }
+    else
+    {
+      ROS_ERROR("Can't initialize mission; internal error");
+    }
+  }
+  else
+  {
+    ROS_ERROR("Can't start mission; possible reasons: disarmed, barometer not ready, IMU not ready");
+  }
+}
+
+// New GPS reading
+void OrcaBase::gpsCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg)
+{
+  if (!gps_ready_)
+  {
+    gps_ready_ = true;
+    ROS_INFO("GPS ready (%g, %g, %g)", msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
+  }
+}
+
+// New ground truth message
+void OrcaBase::groundTruthCallback(const nav_msgs::Odometry::ConstPtr &msg)
+{
+  if (!ground_truth_ready_)
+  {
+    ground_truth_ready_ = true;
+    ROS_INFO("Ground truth available");
+  }
+
+  odom_ground_truth_.fromMsg(*msg);
+}
+
+// New IMU reading
 void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
 {
-  // IMU orientation, rotated to account for the placement in the ROV
+  // The IMU was rotated before mounting, so the orientation reading needs to be rotated back.
   tf2::Quaternion imu_orientation;
   tf2::fromMsg(msg->orientation, imu_orientation);
-  if (simulation_)
-  {
-    // Gazebo IMU noise model might result in non-normalized Quaternion
-    imu_orientation = imu_orientation.normalize();
-  }
-  base_orientation_ = imu_orientation * imu_rotation_;
+  base_orientation_ = tf2::Matrix3x3(imu_orientation) * imu_rotation_;
 
-  double roll, pitch;
-  tf2::Matrix3x3(base_orientation_).getRPY(roll, pitch, yaw_state_);
-
-  // NWU to ENU
-  yaw_state_ += M_PI_2;
-  base_orientation_.setRPY(roll, pitch, yaw_state_);
+  // Get Euler angles
+  double roll = 0, pitch = 0;
+  base_orientation_.getRPY(roll, pitch, yaw_state_);
 
   // Compute a stability metric, used to throttle the pid controllers
   stability_ = std::min(clamp(std::cos(roll), 0.0, 1.0), clamp(std::cos(pitch), 0.0, 1.0));
 
-  // Estimate position -- experimental
-  if (imu_ready_)
-  {
-    tf2::Vector3 linear_acceleration;
-    tf2::fromMsg(msg->linear_acceleration, linear_acceleration);
-    double west = linear_acceleration.y();
-    linear_acceleration.setY(linear_acceleration.x()); // NWU to ENU
-    linear_acceleration.setX(-west); // NWU to ENU
-    tf2::fromMsg(msg->angular_velocity, angular_velocity_);// TODO NWU to ENU?
-    // TODO get covariance
-    double delta = (msg->header.stamp - imu_msg_time_).toSec();
-    linear_velocity_ += linear_acceleration * delta;
-    position_ += linear_velocity_ * delta;
-  }
-  imu_msg_time_ = msg->header.stamp;
+#if 0
+  // NWU to ENU TODO do we need this?
+  yaw_state_ += M_PI_2;
+  base_orientation_.setRPY(roll, pitch, yaw_state_);
+#endif
 
   if (!imu_ready_)
   {
@@ -180,21 +247,13 @@ void OrcaBase::imuCallback(const sensor_msgs::ImuConstPtr &msg)
   }
 }
 
-// Result of yaw pid controller
-void OrcaBase::yawControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
+// Leak detector
+void OrcaBase::leakCallback(const orca_msgs::Leak::ConstPtr& leak_msg)
 {
-  if (holdingHeading())
+  if (leak_msg->leak_detected)
   {
-    yaw_effort_ = dead_band(msg->data * stability_, yaw_pid_dead_band_);
-  }
-}
-
-// Result of depth pid controller
-void OrcaBase::depthControlEffortCallback(const std_msgs::Float64::ConstPtr& msg)
-{
-  if (holdingDepth())
-  {
-    vertical_effort_ = dead_band(-msg->data * stability_, depth_pid_dead_band_);
+    ROS_ERROR("SOS! Leak detected!");
+    setMode(orca_msgs::Control::sos);
   }
 }
 
@@ -204,69 +263,23 @@ void OrcaBase::pingCallback(const std_msgs::Empty::ConstPtr& msg)
   ping_time_ = ros::Time::now();
 }
 
-void OrcaBase::publishYawSetpoint()
+// Local odometry -- result from robot_localization, fusing all continuous sensors
+void OrcaBase::odomLocalCallback(const nav_msgs::Odometry::ConstPtr& msg)
 {
-  if (imu_ready_)
-  {
-    std_msgs::Float64 setpoint;
-    setpoint.data = yaw_setpoint_;
-    yaw_setpoint_pub_.publish(setpoint);
-  }
-}
-
-void OrcaBase::publishDepthSetpoint()
-{
-  if (barometer_ready_)
-  {
-    std_msgs::Float64 setpoint;
-    setpoint.data = depth_setpoint_;
-    depth_setpoint_pub_.publish(setpoint);  
-  }
-}
-
-void OrcaBase::publishYawPidEnable(bool enable)
-{
-  std_msgs::Bool msg_enable;
-  msg_enable.data = static_cast<uint8_t>(enable);
-  yaw_pid_enable_pub_.publish(msg_enable);
-}
-
-void OrcaBase::publishDepthPidEnable(bool enable)
-{
-  std_msgs::Bool msg_enable;
-  msg_enable.data = static_cast<uint8_t>(enable);
-  depth_pid_enable_pub_.publish(msg_enable);
+  odom_local_.fromMsg(*msg);
 }
 
 void OrcaBase::publishOdom()
 {
-  if (imu_ready_ && barometer_ready_)
-  {
-    // Publish a transform from base_link to odom
-    geometry_msgs::TransformStamped odom_tf;
-    odom_tf.header.stamp = imu_msg_time_;
-    odom_tf.header.frame_id = "odom";
-    odom_tf.child_frame_id = "base_link";
-    odom_tf.transform.translation.x = 0; // position_.x();
-    odom_tf.transform.translation.y = 0; // position_.y();
-    odom_tf.transform.translation.z = -depth_state_;
-    odom_tf.transform.rotation = tf2::toMsg(base_orientation_);
-    tf_broadcaster_.sendTransform(odom_tf);
+  nav_msgs::Odometry odom_msg;
 
-    // Publish an odom message
-    nav_msgs::Odometry odom_msg;
-    odom_msg.header.stamp = imu_msg_time_;
-    odom_msg.header.frame_id = "odom";
-    odom_msg.child_frame_id = "base_link";
-    odom_msg.pose.pose.position.x = 0; // position_.x();
-    odom_msg.pose.pose.position.y = 0; // position_.y();
-    odom_msg.pose.pose.position.z = -depth_state_;
-    odom_msg.pose.pose.orientation = tf2::toMsg(base_orientation_);
-    odom_msg.twist.twist.angular = tf2::toMsg(angular_velocity_);
-    odom_msg.twist.twist.linear = tf2::toMsg(linear_velocity_);
-    // TODO compute covariance
-    odom_pub_.publish(odom_msg);
-  }
+  odom_msg.header.stamp = ros::Time::now(); // TODO motion time
+  odom_msg.header.frame_id = "odom";
+  odom_msg.child_frame_id = "base_link";
+
+  odom_plan_.toMsg(odom_msg);
+
+  odom_plan_pub_.publish(odom_msg);
 }
 
 void OrcaBase::publishControl()
@@ -276,11 +289,11 @@ void OrcaBase::publishControl()
   for (int i = 0; i < THRUSTERS.size(); ++i)
   {
     // Clamp forward + strafe to xy_gain_
-    double xy_effort = clamp(forward_effort_ * THRUSTERS[i].forward_factor + strafe_effort_ * THRUSTERS[i].strafe_factor,
+    double xy_effort = clamp(efforts_.forward * THRUSTERS[i].forward_factor + efforts_.strafe * THRUSTERS[i].strafe_factor,
       -xy_gain_, xy_gain_);
 
     // Clamp total thrust
-    thruster_efforts.push_back(clamp(xy_effort + yaw_effort_ * THRUSTERS[i].yaw_factor + vertical_effort_ * THRUSTERS[i].vertical_factor,
+    thruster_efforts.push_back(clamp(xy_effort + efforts_.yaw * THRUSTERS[i].yaw_factor + efforts_.vertical * THRUSTERS[i].vertical_factor,
       THRUST_FULL_REV, THRUST_FULL_FWD));
   }
 
@@ -327,54 +340,51 @@ void OrcaBase::publishControl()
     marker.color.b = 0.0;
     markers_msg.markers.push_back(marker);
   }
-  marker_pub_.publish(markers_msg);
+  thrust_marker_pub_.publish(markers_msg);
 }
 
 // Change operation mode
-void OrcaBase::setMode(uint8_t mode)
+void OrcaBase::setMode(uint8_t new_mode)
 {
-  mode_ = mode;  
+  // Stop all thrusters when we change modes
+  efforts_.clear();
 
-  if (holdingDepth())
+  if (auvOperation() && rovMode(new_mode))
+  {
+    // AUV to ROV transition
+    ping_time_ = ros::Time::now();
+  }
+
+  if (depthHoldMode(new_mode)) // TODO move to keep station planner
   {
     // Set target depth
     depth_setpoint_ = depth_state_;
-    publishDepthSetpoint();
-
-    // Turn on depth pid controller
-    publishDepthPidEnable(true);
+    depth_controller_.setTarget(depth_setpoint_);
 
     // Clear button state
     depth_trim_button_previous_ = false;
   }
-  else
-  {
-    // Turn off depth pid controller
-    publishDepthPidEnable(false);
-  }
 
-  if (holdingHeading())
+  if (headingHoldMode(new_mode)) // TODO move to keep station planner
   {
     // Set target angle
     yaw_setpoint_ = yaw_state_;
-    publishYawSetpoint();
-
-    // Turn on yaw pid controller
-    publishYawPidEnable(true);
+    yaw_controller_.setTarget(yaw_setpoint_);
 
     // Clear button state
     yaw_trim_button_previous_ = false;
   }
-  else
+
+  if (new_mode == orca_msgs::Control::disarmed)
   {
-    // Turn off yaw pid controller
-    publishYawPidEnable(false);
+    // Turn off lights
+    brightness_ = 0;
   }
 
-  if (mode == orca_msgs::Control::disarmed)
-  {
-    forward_effort_ = yaw_effort_ = strafe_effort_ = vertical_effort_ = brightness_ = 0.0;
-  }
+  // TODO sos
+
+  // Set the new mode
+  mode_ = new_mode;
 }
 
 // New input from the gamepad
@@ -382,6 +392,13 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
 {
   // A joystick message means that we're talking to the topside
   ping_time_ = ros::Time::now();
+
+  // If we're in trouble, ignore the joystick
+  if (mode_ == orca_msgs::Control::sos)
+  {
+    ROS_INFO("SOS, ignoring joystick");
+    return;
+  }
 
   // Arm/disarm
   if (joy_msg->buttons[joy_button_disarm_])
@@ -398,7 +415,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   // If we're disarmed, ignore everything else
   if (mode_ == orca_msgs::Control::disarmed)
   {
-    ROS_INFO("Disarmed, ignoring further input");    
+    ROS_INFO("Disarmed, ignoring further input");
     return;
   }
 
@@ -438,7 +455,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     {
       ROS_INFO("Hold heading and depth");
       setMode(orca_msgs::Control::hold_hd);
-      }
+    }
     else
     {
       ROS_ERROR("Barometer and/or IMU not ready, can't hold heading and depth");
@@ -452,7 +469,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     if ((holdingHeading()))
     {
       yaw_setpoint_ = joy_msg->axes[joy_axis_yaw_trim_] > 0.0 ? yaw_setpoint_ + inc_yaw_ : yaw_setpoint_ - inc_yaw_;
-      publishYawSetpoint();
+      yaw_controller_.setTarget(yaw_setpoint_);
     }
 
     yaw_trim_button_previous_ = true;
@@ -469,9 +486,9 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
     // Rising edge
     if (holdingDepth())
     {
-      depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_, 
+      depth_setpoint_ = clamp(joy_msg->axes[joy_axis_vertical_trim_] < 0 ? depth_setpoint_ + inc_depth_ : depth_setpoint_ - inc_depth_,
         DEPTH_HOLD_MIN, DEPTH_HOLD_MAX);
-      publishDepthSetpoint();
+      depth_controller_.setTarget(depth_setpoint_);
     }
 
     depth_trim_button_previous_ = true;
@@ -498,7 +515,7 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   // Lights
   if ((joy_msg->buttons[joy_button_bright_] || joy_msg->buttons[joy_button_dim_]) && !brightness_trim_button_previous_)
   {
-  // Rising edge
+    // Rising edge
     brightness_ = clamp(joy_msg->buttons[joy_button_bright_] ? brightness_ + inc_lights_ : brightness_ - inc_lights_, BRIGHTNESS_MIN, BRIGHTNESS_MAX);
     brightness_trim_button_previous_ = true;
   }
@@ -509,42 +526,86 @@ void OrcaBase::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
   }
 
   // Thrusters
-  forward_effort_ = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
-  if (!holdingHeading())
+  if (rovOperation())
   {
-    yaw_effort_ = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
-  }
-  strafe_effort_ = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
-  if (!holdingDepth())
-  {
-    vertical_effort_ = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
+    efforts_.forward = dead_band(joy_msg->axes[joy_axis_forward_], input_dead_band_) * xy_gain_;
+    if (!holdingHeading())
+    {
+      efforts_.yaw = dead_band(joy_msg->axes[joy_axis_yaw_], input_dead_band_) * yaw_gain_;
+    }
+    efforts_.strafe = dead_band(joy_msg->axes[joy_axis_strafe_], input_dead_band_) * xy_gain_;
+    if (!holdingDepth())
+    {
+      efforts_.vertical = dead_band(joy_msg->axes[joy_axis_vertical_], input_dead_band_) * vertical_gain_;
+    }
   }
 }
 
 // Our main loop
 void OrcaBase::spinOnce()
 {
-  // If we're not getting messages from the topside, disarm and wait
-  if (ros::Time::now() - ping_time_ > ros::Duration(5.0) && mode_ != orca_msgs::Control::disarmed)
+  ros::Time now = ros::Time::now();
+  double dt = (now - prev_loop_time_).toSec();
+  prev_loop_time_ = now;
+
+  // Check for communication problems
+  if (rovOperation() && now - ping_time_ > ros::Duration(COMM_ERROR_TIMEOUT_DISARM))
   {
-    ROS_ERROR("Lost contact with topside; disarming");
-    setMode(orca_msgs::Control::disarmed);
+    if (now - ping_time_ > ros::Duration(COMM_ERROR_TIMEOUT_SOS))
+    {
+      ROS_ERROR("SOS! Lost contact for way too long");
+      setMode(orca_msgs::Control::sos);
+    }
+    else
+    {
+      ROS_ERROR("Lost contact with topside; disarming");
+      setMode(orca_msgs::Control::disarmed);
+    }
   }
 
-  // Publish yaw state
+  // Compute yaw effort
   if (holdingHeading())
   {
-    std_msgs::Float64 yaw_state;
-    yaw_state.data = yaw_state_;
-    yaw_state_pub_.publish(yaw_state);
+    double effort = yaw_controller_.calc(yaw_state_, dt, 0);
+    efforts_.yaw = dead_band(effort * stability_, yaw_pid_dead_band_);
   }
 
-  // Publish depth state
+  // Compute depth effort
   if (holdingDepth())
   {
-    std_msgs::Float64 depth_state;
-    depth_state.data = depth_state_;
-    depth_state_pub_.publish(depth_state);
+    double effort = depth_controller_.calc(depth_state_, dt, 0);
+    efforts_.vertical = dead_band(-effort * stability_, depth_pid_dead_band_);
+  }
+
+  // Run a mission
+  if (mode_ == orca_msgs::Control::mission)
+  {
+    BaseMission::addToPath(mission_estimated_path_, odom_local_);
+    mission_estimated_pub_.publish(mission_estimated_path_);
+
+    BaseMission::addToPath(mission_ground_truth_path_, odom_ground_truth_);
+    mission_ground_truth_pub_.publish(mission_ground_truth_path_);
+
+    OrcaPose u_bar;
+    if (mission_->advance(odom_local_, odom_plan_, u_bar))
+    {
+      // u_bar in world frame => normalized efforts in body frame
+      efforts_.fromAcceleration(u_bar, odom_plan_.pose.yaw);
+
+      BaseMission::addToPath(mission_plan_path_, odom_plan_.pose);
+      mission_plan_pub_.publish(mission_plan_path_);
+
+      // TODO deadband?
+      efforts_.forward = clamp(efforts_.forward * stability_, -1.0, 1.0);
+      efforts_.strafe = clamp(efforts_.strafe * stability_, -1.0, 1.0);
+      efforts_.vertical = clamp(-efforts_.vertical * stability_, -1.0, 1.0);
+      efforts_.yaw = clamp(efforts_.yaw * stability_, -1.0, 1.0);
+    }
+    else
+    {
+      ROS_INFO("Mission complete");
+      setMode(orca_msgs::Control::manual);
+    }
   }
 
   // Publish controls for thrusters, lights and camera tilt
