@@ -6,8 +6,7 @@ Version 0.1.0  supports basic ROV functions.
 Orca requires hardware modifications to the BlueROV2.
 It does not use the Pixhawk controller that comes with the BlueROV2, and does not support [mavros](http://wiki.ros.org/mavros), [ArduSub](https://www.ardusub.com/) or [QGroundControl](http://qgroundcontrol.com/).
 
-> **NOTE:** development has shifted to [Orca3](https://github.com/clydemcqueen/orca3),
-> which uses [ROS2 Navigation](https://navigation.ros.org/index.html) for mission planning and execution.
+> Update 17-June-2022: work has shifted to [Orca4](https://github.com/clydemcqueen/orca4), which uses [ArduSub](http://www.ardusub.com/) as the flight controller.
 
 ## Tested hardware
 
